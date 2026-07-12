@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ChevronDown, ExternalLink, Settings2, Zap } from "lucide-react";
+import { Link2 } from "lucide-react";
 import { parseEther } from "viem";
 import {
   useAccount,
