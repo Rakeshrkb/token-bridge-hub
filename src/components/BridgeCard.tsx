@@ -360,9 +360,10 @@ export function BridgeCard() {
           ) : (
             <Button
               size="lg"
-              disabled={cta.disabled || switching}
+              disabled={cta.disabled || switching || busy}
               onClick={() => {
                 if (cta.action === "switch") switchChain({ chainId: from.id });
+                else if (cta.action === "bridge") handleBridge();
               }}
               className="h-14 w-full rounded-2xl text-base font-semibold"
             >
@@ -371,6 +372,17 @@ export function BridgeCard() {
           )}
         </div>
       </div>
+
+      {txHash && (
+        <a
+          href={`${from.id === sepolia.id ? "https://sepolia.etherscan.io" : "https://sepolia.basescan.org"}/tx/${txHash}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 flex items-center justify-center gap-1.5 text-xs text-primary hover:underline"
+        >
+          View transaction <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Testnet bridging · Powered by RainbowKit + wagmi
