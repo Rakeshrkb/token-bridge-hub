@@ -1,24 +1,67 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { BridgeCard } from "@/components/BridgeCard";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      {/* Ambient gradient background */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-40 left-1/2 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-primary/20 blur-[140px]" />
+        <div className="absolute bottom-0 right-0 h-[500px] w-[500px] rounded-full bg-[#627EEA]/15 blur-[140px]" />
+        <div className="absolute bottom-20 left-0 h-[400px] w-[400px] rounded-full bg-[#0052FF]/15 blur-[140px]" />
+      </div>
+
+      {/* Nav */}
+      <header className="flex items-center justify-between px-6 py-5 md:px-10">
+        <a href="/" className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-[#627EEA] text-sm font-black text-primary-foreground">
+            B
+          </div>
+          <span className="text-lg font-bold tracking-tight">Bridgr</span>
+        </a>
+        <nav className="hidden items-center gap-6 md:flex">
+          <a className="text-sm text-muted-foreground transition hover:text-foreground" href="#">
+            Bridge
+          </a>
+          <a className="text-sm text-muted-foreground transition hover:text-foreground" href="#">
+            Portfolio
+          </a>
+          <a className="text-sm text-muted-foreground transition hover:text-foreground" href="#">
+            History
+          </a>
+          <a className="text-sm text-muted-foreground transition hover:text-foreground" href="#">
+            Docs
+          </a>
+        </nav>
+        <ConnectButton
+          accountStatus={{ smallScreen: "avatar", largeScreen: "full" }}
+          chainStatus="icon"
+          showBalance={{ smallScreen: false, largeScreen: true }}
+        />
+      </header>
+
+      {/* Hero + Card */}
+      <main className="flex flex-col items-center px-4 pb-20 pt-8 md:pt-16">
+        <div className="mb-8 max-w-xl text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-secondary/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+            Testnet live · Sepolia ↔ Base Sepolia
+          </div>
+          <h1 className="text-balance text-4xl font-bold tracking-tight md:text-5xl">
+            The fastest way to bridge crypto
+          </h1>
+          <p className="mt-3 text-balance text-sm text-muted-foreground md:text-base">
+            Move tokens across chains in seconds with the best routes and lowest fees.
+          </p>
+        </div>
+
+        <BridgeCard />
+      </main>
     </div>
   );
 }
