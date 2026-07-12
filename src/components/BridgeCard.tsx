@@ -386,6 +386,47 @@ export function BridgeCard() {
         </a>
       )}
 
+      <Dialog open={confirmedDialogOpen} onOpenChange={setConfirmedDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Bridge submitted</DialogTitle>
+            <DialogDescription>
+              Your transaction has been confirmed on {from.name}.
+            </DialogDescription>
+          </DialogHeader>
+          {txHash && (
+            <div className="mt-2 space-y-3">
+              <div className="rounded-xl bg-secondary/50 p-3 text-sm">
+                <div className="text-xs text-muted-foreground">Transaction hash</div>
+                <div className="mt-1 font-mono text-foreground">
+                  {txHash.slice(0, 14)}…{txHash.slice(-12)}
+                </div>
+              </div>
+              <a
+                href={`https://ccip.chain.link/msg/${txHash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Link2 className="h-4 w-4" />
+                Track transaction on CCIP
+              </a>
+              <a
+                href={`${from.id === sepolia.id ? "https://sepolia.etherscan.io" : "https://sepolia.basescan.org"}/tx/${txHash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                View on explorer <ExternalLink className="h-3 w-3" />
+              </a>
+              <Button onClick={closeConfirmedDialog} variant="outline" className="w-full rounded-xl">
+                Close
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Testnet bridging · Powered by RainbowKit + wagmi
       </p>
