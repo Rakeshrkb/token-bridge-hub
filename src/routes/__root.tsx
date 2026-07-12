@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Web3Provider } from "../components/Web3Provider";
+import { ThemeProvider } from "../components/ThemeProvider";
 import { Toaster } from "../components/ui/sonner";
 
 function NotFoundComponent() {
@@ -106,7 +107,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
@@ -123,10 +124,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Web3Provider>
-        <Outlet />
-        <Toaster richColors position="bottom-right" />
-      </Web3Provider>
+      <ThemeProvider>
+        <Web3Provider>
+          <Outlet />
+          <Toaster richColors position="bottom-right" />
+        </Web3Provider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

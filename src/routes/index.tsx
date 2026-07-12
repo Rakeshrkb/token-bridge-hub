@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { BridgeCard } from "@/components/BridgeCard";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -38,11 +39,14 @@ function Index() {
             Docs
           </a>
         </nav>
-        <ConnectButton
-          accountStatus={{ smallScreen: "avatar", largeScreen: "full" }}
-          chainStatus="icon"
-          showBalance={{ smallScreen: false, largeScreen: true }}
-        />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <ConnectButton
+            accountStatus={{ smallScreen: "avatar", largeScreen: "full" }}
+            chainStatus="icon"
+            showBalance={{ smallScreen: false, largeScreen: true }}
+          />
+        </div>
       </header>
 
       {/* Hero + Card */}
