@@ -1,5 +1,7 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "bridgr",
+  "version": "0.1.0",
+  "description": "A minimal cross-chain crypto bridge interface powered by RainbowKit, wagmi, and Chainlink CCIP.",
   "private": true,
   "sideEffects": false,
   "type": "module",
