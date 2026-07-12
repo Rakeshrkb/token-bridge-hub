@@ -125,6 +125,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <Web3Provider>
         <Outlet />
+        <Toaster richColors position="bottom-right" />
       </Web3Provider>
     </QueryClientProvider>
   );
