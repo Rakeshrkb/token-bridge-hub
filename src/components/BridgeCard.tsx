@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { BRIDGE_ABI, BRIDGE_CHAINS, isBridgeSupported } from "@/lib/bridge";
+import { BRIDGE_ABI, BRIDGE_CHAINS, getMessageIdFromReceipt, isBridgeSupported } from "@/lib/bridge";
 
 type ChainMeta = {
   id: number;
@@ -120,6 +120,7 @@ export function BridgeCard() {
   const [to, setTo] = useState<ChainMeta>(CHAINS[1]);
   const [amount, setAmount] = useState("");
   const [confirmedDialogOpen, setConfirmedDialogOpen] = useState(false);
+  const [messageId, setMessageId] = useState<`0x${string}` | null>(null);
 
   const { address, isConnected, chainId } = useAccount();
   const { switchChain, isPending: switching } = useSwitchChain();
@@ -135,10 +136,21 @@ export function BridgeCard() {
     isPending: sending,
     reset: resetWrite,
   } = useWriteContract();
-  const { isLoading: confirming, isSuccess: confirmed } = useWaitForTransactionReceipt({
+  const {
+    data: receipt,
+    isLoading: confirming,
+    isSuccess: confirmed,
+  } = useWaitForTransactionReceipt({
     hash: txHash,
     chainId: from.id,
   });
+
+  useEffect(() => {
+    if (receipt) {
+      const id = getMessageIdFromReceipt(receipt);
+      if (id) setMessageId(id);
+    }
+  }, [receipt]);
 
   useEffect(() => {
     if (confirmed && txHash) {
@@ -153,6 +165,7 @@ export function BridgeCard() {
   const closeConfirmedDialog = () => {
     setConfirmedDialogOpen(false);
     setAmount("");
+    setMessageId(null);
     resetWrite();
   };
 
@@ -395,21 +408,25 @@ export function BridgeCard() {
           </DialogHeader>
           {txHash && (
             <div className="mt-2 space-y-3">
-              <div className="rounded-xl bg-secondary/50 p-3 text-sm">
-                <div className="text-xs text-muted-foreground">Transaction hash</div>
-                <div className="mt-1 font-mono text-foreground">
-                  {txHash.slice(0, 14)}…{txHash.slice(-12)}
+              {messageId && (
+                <div className="rounded-xl bg-secondary/50 p-3 text-sm">
+                  <div className="text-xs text-muted-foreground">CCIP message ID</div>
+                  <div className="mt-1 break-all font-mono text-foreground">
+                    {messageId.slice(0, 14)}…{messageId.slice(-12)}
+                  </div>
                 </div>
-              </div>
-              <a
-                href={`https://ccip.chain.link/msg/${txHash}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-              >
-                <Link2 className="h-4 w-4" />
-                Track transaction on CCIP
-              </a>
+              )}
+              {messageId && (
+                <a
+                  href={`https://ccip.chain.link/msg/${messageId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  <Link2 className="h-4 w-4" />
+                  Track transaction on CCIP
+                </a>
+              )}
               <a
                 href={`${from.id === sepolia.id ? "https://sepolia.etherscan.io" : "https://sepolia.basescan.org"}/tx/${txHash}`}
                 target="_blank"
