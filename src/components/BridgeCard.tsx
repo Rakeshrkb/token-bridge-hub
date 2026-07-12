@@ -120,6 +120,7 @@ export function BridgeCard() {
   const [to, setTo] = useState<ChainMeta>(CHAINS[1]);
   const [amount, setAmount] = useState("");
   const [confirmedDialogOpen, setConfirmedDialogOpen] = useState(false);
+  const [messageId, setMessageId] = useState<`0x${string}` | null>(null);
 
   const { address, isConnected, chainId } = useAccount();
   const { switchChain, isPending: switching } = useSwitchChain();
@@ -135,10 +136,21 @@ export function BridgeCard() {
     isPending: sending,
     reset: resetWrite,
   } = useWriteContract();
-  const { isLoading: confirming, isSuccess: confirmed } = useWaitForTransactionReceipt({
+  const {
+    data: receipt,
+    isLoading: confirming,
+    isSuccess: confirmed,
+  } = useWaitForTransactionReceipt({
     hash: txHash,
     chainId: from.id,
   });
+
+  useEffect(() => {
+    if (receipt) {
+      const id = getMessageIdFromReceipt(receipt);
+      if (id) setMessageId(id);
+    }
+  }, [receipt]);
 
   useEffect(() => {
     if (confirmed && txHash) {
@@ -153,6 +165,7 @@ export function BridgeCard() {
   const closeConfirmedDialog = () => {
     setConfirmedDialogOpen(false);
     setAmount("");
+    setMessageId(null);
     resetWrite();
   };
 
