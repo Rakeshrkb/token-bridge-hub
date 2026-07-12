@@ -232,15 +232,7 @@ export function BridgeCard() {
     <div className="w-full max-w-[460px]">
       <div className="relative rounded-3xl border border-border/60 bg-card/80 p-1.5 shadow-2xl shadow-primary/10 backdrop-blur-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <div className="flex gap-1 rounded-full bg-secondary/60 p-1">
-            <button className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
-              Bridge
-            </button>
-            <button className="rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">
-              Swap
-            </button>
-          </div>
+        <div className="flex items-center justify-end px-4 pt-3 pb-2">
           <button className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
             <Settings2 className="h-4 w-4" />
           </button>
@@ -250,10 +242,11 @@ export function BridgeCard() {
         <div className="rounded-2xl bg-secondary/30 p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              From
+              Sell
             </span>
-            <ChainPicker value={from} onChange={setFrom} label="From" exclude={to.id} />
+            <ChainPicker value={from} onChange={setFrom} label="Sell" exclude={to.id} />
           </div>
+
           <div className="mt-3 flex items-center gap-3">
             <input
               inputMode="decimal"
