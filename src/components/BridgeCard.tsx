@@ -1,8 +1,16 @@
-import { useMemo, useState } from "react";
-import { ArrowDownUp, ChevronDown, Settings2, Zap } from "lucide-react";
-import { useAccount, useBalance, useSwitchChain } from "wagmi";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowDownUp, ChevronDown, ExternalLink, Settings2, Zap } from "lucide-react";
+import { parseEther } from "viem";
+import {
+  useAccount,
+  useBalance,
+  useSwitchChain,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 import { sepolia, baseSepolia, mainnet, base, arbitrum, optimism, polygon } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { BRIDGE_ABI, BRIDGE_CHAINS, isBridgeSupported } from "@/lib/bridge";
 
 type ChainMeta = {
   id: number;
