@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Web3Provider } from "../components/Web3Provider";
+import { Toaster } from "../components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -124,6 +125,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <Web3Provider>
         <Outlet />
+        <Toaster richColors position="bottom-right" />
       </Web3Provider>
     </QueryClientProvider>
   );

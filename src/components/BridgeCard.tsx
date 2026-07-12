@@ -1,8 +1,16 @@
-import { useMemo, useState } from "react";
-import { ArrowDownUp, ChevronDown, Settings2, Zap } from "lucide-react";
-import { useAccount, useBalance, useSwitchChain } from "wagmi";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowDownUp, ChevronDown, ExternalLink, Settings2, Zap } from "lucide-react";
+import { parseEther } from "viem";
+import {
+  useAccount,
+  useBalance,
+  useSwitchChain,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 import { sepolia, baseSepolia, mainnet, base, arbitrum, optimism, polygon } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { BRIDGE_ABI, BRIDGE_CHAINS, isBridgeSupported } from "@/lib/bridge";
 
 type ChainMeta = {
   id: number;
@@ -112,11 +121,33 @@ export function BridgeCard() {
 
   const { address, isConnected, chainId } = useAccount();
   const { switchChain, isPending: switching } = useSwitchChain();
-  const { data: balance } = useBalance({
+  const { data: balance, refetch: refetchBalance } = useBalance({
     address,
     chainId: from.id,
     query: { enabled: !!address },
   });
+
+  const {
+    writeContract,
+    data: txHash,
+    isPending: sending,
+    reset: resetWrite,
+  } = useWriteContract();
+  const { isLoading: confirming, isSuccess: confirmed } = useWaitForTransactionReceipt({
+    hash: txHash,
+    chainId: from.id,
+  });
+
+  useEffect(() => {
+    if (confirmed && txHash) {
+      toast.success("Bridge transaction confirmed", {
+        description: "Funds will arrive on the destination chain shortly.",
+      });
+      refetchBalance();
+      setAmount("");
+      resetWrite();
+    }
+  }, [confirmed, txHash, refetchBalance, resetWrite]);
 
   const swap = () => {
     setFrom(to);
@@ -130,16 +161,72 @@ export function BridgeCard() {
   const needsSwitch = isConnected && chainId !== from.id;
   const insufficientBalance =
     isConnected && balance && numAmount > Number(balance.formatted);
+  const routeSupported = isBridgeSupported(from.id) && isBridgeSupported(to.id);
+  const busy = sending || confirming;
 
   const cta = useMemo(() => {
     if (!isConnected) return { label: "Connect wallet", disabled: false };
+    if (!routeSupported)
+      return { label: "Route not supported (testnet only)", disabled: true };
     if (!amount || numAmount <= 0) return { label: "Enter an amount", disabled: true };
     if (needsSwitch)
       return { label: `Switch to ${from.name}`, disabled: false, action: "switch" as const };
     if (insufficientBalance)
       return { label: `Insufficient ${balance?.symbol}`, disabled: true };
+    if (sending) return { label: "Confirm in wallet…", disabled: true };
+    if (confirming) return { label: "Bridging…", disabled: true };
     return { label: `Bridge to ${to.name}`, disabled: false, action: "bridge" as const };
-  }, [isConnected, amount, numAmount, needsSwitch, insufficientBalance, balance, from, to]);
+  }, [
+    isConnected,
+    routeSupported,
+    amount,
+    numAmount,
+    needsSwitch,
+    insufficientBalance,
+    balance,
+    sending,
+    confirming,
+    from,
+    to,
+  ]);
+
+  const handleBridge = () => {
+    if (!address) return;
+    const src = BRIDGE_CHAINS[from.id];
+    const dst = BRIDGE_CHAINS[to.id];
+    if (!src || !dst) {
+      toast.error("Unsupported route");
+      return;
+    }
+    try {
+      const value = parseEther(amount as `${number}`);
+      writeContract(
+        {
+          address: src.contract,
+          abi: BRIDGE_ABI,
+          functionName: "bridgeETH",
+          args: [dst.selector, address],
+          value,
+          chainId: src.chainId,
+        },
+        {
+          onSuccess: (hash) => {
+            toast.success("Transaction submitted", {
+              description: `${hash.slice(0, 10)}…${hash.slice(-6)}`,
+            });
+          },
+          onError: (err) => {
+            toast.error("Bridge failed", { description: err.message.split("\n")[0] });
+          },
+        },
+      );
+    } catch (e) {
+      toast.error("Invalid amount", {
+        description: e instanceof Error ? e.message : "Try a smaller amount",
+      });
+    }
+  };
+
 
   return (
     <div className="w-full max-w-[460px]">
@@ -273,9 +360,10 @@ export function BridgeCard() {
           ) : (
             <Button
               size="lg"
-              disabled={cta.disabled || switching}
+              disabled={cta.disabled || switching || busy}
               onClick={() => {
                 if (cta.action === "switch") switchChain({ chainId: from.id });
+                else if (cta.action === "bridge") handleBridge();
               }}
               className="h-14 w-full rounded-2xl text-base font-semibold"
             >
@@ -284,6 +372,17 @@ export function BridgeCard() {
           )}
         </div>
       </div>
+
+      {txHash && (
+        <a
+          href={`${from.id === sepolia.id ? "https://sepolia.etherscan.io" : "https://sepolia.basescan.org"}/tx/${txHash}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 flex items-center justify-center gap-1.5 text-xs text-primary hover:underline"
+        >
+          View transaction <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Testnet bridging · Powered by RainbowKit + wagmi
