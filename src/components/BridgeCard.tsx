@@ -293,9 +293,10 @@ export function BridgeCard() {
         <div className="mt-1.5 rounded-2xl bg-secondary/30 p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              To
+              Buy
             </span>
-            <ChainPicker value={to} onChange={setTo} label="To" exclude={from.id} />
+            <ChainPicker value={to} onChange={setTo} label="Buy" exclude={from.id} />
+
           </div>
           <div className="mt-3 flex items-center gap-3">
             <div className="min-w-0 flex-1 truncate text-4xl font-semibold text-muted-foreground/60">
