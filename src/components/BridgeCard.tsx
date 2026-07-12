@@ -262,9 +262,9 @@ export function BridgeCard() {
         <div className="rounded-2xl bg-secondary/30 p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Sell
+              From
             </span>
-            <ChainPicker value={from} onChange={setFrom} label="Sell" exclude={to.id} />
+            <ChainPicker value={from} onChange={setFrom} label="From" exclude={to.id} />
           </div>
 
           <div className="mt-3 flex items-center gap-3">
@@ -313,9 +313,9 @@ export function BridgeCard() {
         <div className="mt-1.5 rounded-2xl bg-secondary/30 p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Buy
+              To
             </span>
-            <ChainPicker value={to} onChange={setTo} label="Buy" exclude={from.id} />
+            <ChainPicker value={to} onChange={setTo} label="To" exclude={from.id} />
 
           </div>
           <div className="mt-3 flex items-center gap-3">
@@ -444,7 +444,7 @@ export function BridgeCard() {
       </Dialog>
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        Testnet bridging · Powered by RainbowKit + wagmi
+        Testnet bridging · Powered by Chainlink CCIP
       </p>
     </div>
   );

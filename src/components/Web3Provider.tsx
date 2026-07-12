@@ -9,8 +9,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     <WagmiProvider config={wagmiConfig}>
       <RainbowKitProvider
         theme={darkTheme({
-          accentColor: "hsl(160 84% 55%)",
-          accentColorForeground: "#0a0a0a",
+          accentColor: '#2563eb',
+          accentColorForeground: "#faf8f8",
           borderRadius: "large",
           overlayBlur: "small",
         })}

@@ -19,26 +19,28 @@ function Index() {
 
       {/* Nav */}
       <header className="flex items-center justify-between px-6 py-5 md:px-10">
-        <a href="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-[#627EEA] text-sm font-black text-primary-foreground">
-            B
+        {/* LEFT SIDE (logo + nav together) */}
+        <div className="flex items-center gap-8">
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 text-white">
+              <span className="text-sm font-bold">⇄</span>
+            </div>
+            <span className="text-lg font-semibold tracking-tight">
+              Bridge<span className="text-primary">X</span>
+            </span>
           </div>
-          <span className="text-lg font-bold tracking-tight">Bridgr</span>
-        </a>
-        <nav className="hidden items-center gap-6 md:flex">
-          <a className="text-sm text-muted-foreground transition hover:text-foreground" href="#">
-            Bridge
-          </a>
-          <a className="text-sm text-muted-foreground transition hover:text-foreground" href="#">
-            Portfolio
-          </a>
-          <a className="text-sm text-muted-foreground transition hover:text-foreground" href="#">
-            History
-          </a>
-          <a className="text-sm text-muted-foreground transition hover:text-foreground" href="#">
-            Docs
-          </a>
-        </nav>
+
+          {/* Nav */}
+          <nav className="hidden items-center gap-6 md:flex">
+            <a className="text-foreground">Bridge</a>
+            <a className="text-muted-foreground hover:text-foreground transition">
+              Docs
+            </a>
+          </nav>
+        </div>
+
+        {/* RIGHT SIDE */}
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <ConnectButton
@@ -50,18 +52,18 @@ function Index() {
       </header>
 
       {/* Hero + Card */}
-      <main className="flex flex-col items-center px-4 pb-20 pt-8 md:pt-16">
+      <main className="flex flex-col items-center px-4 pb-20 pt-4 md:pt-6">
         <div className="mb-8 max-w-xl text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-secondary/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-            Testnet live · Sepolia ↔ Base Sepolia
-          </div>
-          <h1 className="text-balance text-4xl font-bold tracking-tight md:text-5xl">
+          {/* <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-secondary/40 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500 dark:bg-green-400" />
+            Live on Testnet only
+          </div> */}
+          {/* <h1 className="text-balance text-4xl font-bold tracking-tight md:text-5xl">
             The fastest way to bridge crypto
-          </h1>
-          <p className="mt-3 text-balance text-sm text-muted-foreground md:text-base">
+          </h1> */}
+          {/* <p className="mt-3 text-balance text-sm text-muted-foreground md:text-base">
             Move tokens across chains in seconds with the best routes and lowest fees.
-          </p>
+          </p> */}
         </div>
 
         <BridgeCard />
