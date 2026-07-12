@@ -120,6 +120,7 @@ export function BridgeCard() {
   const [from, setFrom] = useState<ChainMeta>(CHAINS[0]);
   const [to, setTo] = useState<ChainMeta>(CHAINS[1]);
   const [amount, setAmount] = useState("");
+  const [confirmedDialogOpen, setConfirmedDialogOpen] = useState(false);
 
   const { address, isConnected, chainId } = useAccount();
   const { switchChain, isPending: switching } = useSwitchChain();
