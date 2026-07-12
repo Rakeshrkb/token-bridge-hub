@@ -1,0 +1,293 @@
+import { useMemo, useState } from "react";
+import { ArrowDownUp, ChevronDown, Settings2, Zap } from "lucide-react";
+import { useAccount, useBalance, useSwitchChain } from "wagmi";
+import { sepolia, baseSepolia, mainnet, base, arbitrum, optimism, polygon } from "wagmi/chains";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+
+type ChainMeta = {
+  id: number;
+  name: string;
+  short: string;
+  color: string;
+  testnet?: boolean;
+};
+
+const CHAINS: ChainMeta[] = [
+  { id: sepolia.id, name: "Sepolia", short: "SEP", color: "#627EEA", testnet: true },
+  { id: baseSepolia.id, name: "Base Sepolia", short: "BASE", color: "#0052FF", testnet: true },
+  { id: mainnet.id, name: "Ethereum", short: "ETH", color: "#627EEA" },
+  { id: base.id, name: "Base", short: "BASE", color: "#0052FF" },
+  { id: arbitrum.id, name: "Arbitrum", short: "ARB", color: "#28A0F0" },
+  { id: optimism.id, name: "Optimism", short: "OP", color: "#FF0420" },
+  { id: polygon.id, name: "Polygon", short: "MATIC", color: "#8247E5" },
+];
+
+function ChainBadge({ chain, size = 32 }: { chain: ChainMeta; size?: number }) {
+  return (
+    <div
+      className="flex items-center justify-center rounded-full font-bold text-white shrink-0"
+      style={{
+        width: size,
+        height: size,
+        background: `linear-gradient(135deg, ${chain.color}, ${chain.color}cc)`,
+        fontSize: size * 0.34,
+      }}
+    >
+      {chain.short.slice(0, 2)}
+    </div>
+  );
+}
+
+function ChainPicker({
+  value,
+  onChange,
+  label,
+  exclude,
+}: {
+  value: ChainMeta;
+  onChange: (c: ChainMeta) => void;
+  label: string;
+  exclude?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="group flex items-center gap-2 rounded-xl border border-border/60 bg-secondary/40 px-3 py-2 text-left transition-colors hover:bg-secondary">
+          <ChainBadge chain={value} size={28} />
+          <div className="flex flex-col leading-tight">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {label}
+            </span>
+            <span className="text-sm font-semibold text-foreground">{value.name}</span>
+          </div>
+          <ChevronDown className="ml-1 h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Select {label.toLowerCase()} network</DialogTitle>
+        </DialogHeader>
+        <div className="mt-2 flex flex-col gap-1">
+          {CHAINS.filter((c) => c.id !== exclude).map((c) => (
+            <button
+              key={c.id}
+              onClick={() => {
+                onChange(c);
+                setOpen(false);
+              }}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-secondary",
+                c.id === value.id && "bg-secondary",
+              )}
+            >
+              <ChainBadge chain={c} size={32} />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-foreground">{c.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {c.testnet ? "Testnet" : "Mainnet"} · Chain ID {c.id}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function BridgeCard() {
+  const [from, setFrom] = useState<ChainMeta>(CHAINS[0]);
+  const [to, setTo] = useState<ChainMeta>(CHAINS[1]);
+  const [amount, setAmount] = useState("");
+
+  const { address, isConnected, chainId } = useAccount();
+  const { switchChain, isPending: switching } = useSwitchChain();
+  const { data: balance } = useBalance({
+    address,
+    chainId: from.id,
+    query: { enabled: !!address },
+  });
+
+  const swap = () => {
+    setFrom(to);
+    setTo(from);
+  };
+
+  const numAmount = Number(amount || "0");
+  const receiveAmount = numAmount > 0 ? (numAmount * 0.9985).toFixed(6) : "0";
+  const fee = numAmount > 0 ? (numAmount * 0.0015).toFixed(6) : "0";
+
+  const needsSwitch = isConnected && chainId !== from.id;
+  const insufficientBalance =
+    isConnected && balance && numAmount > Number(balance.formatted);
+
+  const cta = useMemo(() => {
+    if (!isConnected) return { label: "Connect wallet", disabled: false };
+    if (!amount || numAmount <= 0) return { label: "Enter an amount", disabled: true };
+    if (needsSwitch)
+      return { label: `Switch to ${from.name}`, disabled: false, action: "switch" as const };
+    if (insufficientBalance)
+      return { label: `Insufficient ${balance?.symbol}`, disabled: true };
+    return { label: `Bridge to ${to.name}`, disabled: false, action: "bridge" as const };
+  }, [isConnected, amount, numAmount, needsSwitch, insufficientBalance, balance, from, to]);
+
+  return (
+    <div className="w-full max-w-[460px]">
+      <div className="relative rounded-3xl border border-border/60 bg-card/80 p-1.5 shadow-2xl shadow-primary/10 backdrop-blur-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          <div className="flex gap-1 rounded-full bg-secondary/60 p-1">
+            <button className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+              Bridge
+            </button>
+            <button className="rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">
+              Swap
+            </button>
+          </div>
+          <button className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+            <Settings2 className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* From */}
+        <div className="rounded-2xl bg-secondary/30 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              From
+            </span>
+            <ChainPicker value={from} onChange={setFrom} label="From" exclude={to.id} />
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <input
+              inputMode="decimal"
+              placeholder="0"
+              value={amount}
+              onChange={(e) => {
+                const v = e.target.value.replace(/,/g, ".");
+                if (/^\d*\.?\d*$/.test(v)) setAmount(v);
+              }}
+              className="min-w-0 flex-1 bg-transparent text-4xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/40"
+            />
+            <div className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#627EEA] text-[10px] font-bold text-white">
+                Ξ
+              </div>
+              <span className="text-sm font-semibold text-foreground">ETH</span>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span>${numAmount > 0 ? (numAmount * 3200).toFixed(2) : "0.00"}</span>
+            {isConnected && balance && (
+              <button
+                onClick={() => setAmount(balance.formatted)}
+                className="rounded-md px-1.5 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10"
+              >
+                Balance: {Number(balance.formatted).toFixed(4)} {balance.symbol} · Max
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Swap button */}
+        <div className="relative h-0">
+          <button
+            onClick={swap}
+            className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-xl border-4 border-card bg-secondary p-2 text-foreground transition-all hover:bg-primary hover:text-primary-foreground hover:rotate-180"
+            aria-label="Swap chains"
+          >
+            <ArrowDownUp className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* To */}
+        <div className="mt-1.5 rounded-2xl bg-secondary/30 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              To
+            </span>
+            <ChainPicker value={to} onChange={setTo} label="To" exclude={from.id} />
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="min-w-0 flex-1 truncate text-4xl font-semibold text-muted-foreground/60">
+              {receiveAmount}
+            </div>
+            <div className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#627EEA] text-[10px] font-bold text-white">
+                Ξ
+              </div>
+              <span className="text-sm font-semibold text-foreground">ETH</span>
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-muted-foreground">
+            ${numAmount > 0 ? (numAmount * 3200 * 0.9985).toFixed(2) : "0.00"}
+          </div>
+        </div>
+
+        {/* Details */}
+        <div className="mt-2 space-y-1.5 px-4 py-3 text-xs">
+          <div className="flex justify-between text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Zap className="h-3 w-3 text-primary" />
+              Est. time
+            </span>
+            <span className="text-foreground">~15 seconds</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Bridge fee</span>
+            <span className="text-foreground">
+              {fee} ETH <span className="text-muted-foreground">(0.15%)</span>
+            </span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Route</span>
+            <span className="text-foreground">
+              {from.name} → {to.name}
+            </span>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="p-1.5 pt-0">
+          {!isConnected ? (
+            <ConnectButton.Custom>
+              {({ openConnectModal }) => (
+                <Button
+                  onClick={openConnectModal}
+                  size="lg"
+                  className="h-14 w-full rounded-2xl text-base font-semibold"
+                >
+                  Connect wallet
+                </Button>
+              )}
+            </ConnectButton.Custom>
+          ) : (
+            <Button
+              size="lg"
+              disabled={cta.disabled || switching}
+              onClick={() => {
+                if (cta.action === "switch") switchChain({ chainId: from.id });
+              }}
+              className="h-14 w-full rounded-2xl text-base font-semibold"
+            >
+              {switching ? "Switching network…" : cta.label}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Testnet bridging · Powered by RainbowKit + wagmi
+      </p>
+    </div>
+  );
+}
