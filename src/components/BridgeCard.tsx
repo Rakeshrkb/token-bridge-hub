@@ -121,11 +121,33 @@ export function BridgeCard() {
 
   const { address, isConnected, chainId } = useAccount();
   const { switchChain, isPending: switching } = useSwitchChain();
-  const { data: balance } = useBalance({
+  const { data: balance, refetch: refetchBalance } = useBalance({
     address,
     chainId: from.id,
     query: { enabled: !!address },
   });
+
+  const {
+    writeContract,
+    data: txHash,
+    isPending: sending,
+    reset: resetWrite,
+  } = useWriteContract();
+  const { isLoading: confirming, isSuccess: confirmed } = useWaitForTransactionReceipt({
+    hash: txHash,
+    chainId: from.id,
+  });
+
+  useEffect(() => {
+    if (confirmed && txHash) {
+      toast.success("Bridge transaction confirmed", {
+        description: "Funds will arrive on the destination chain shortly.",
+      });
+      refetchBalance();
+      setAmount("");
+      resetWrite();
+    }
+  }, [confirmed, txHash, refetchBalance, resetWrite]);
 
   const swap = () => {
     setFrom(to);
@@ -139,16 +161,72 @@ export function BridgeCard() {
   const needsSwitch = isConnected && chainId !== from.id;
   const insufficientBalance =
     isConnected && balance && numAmount > Number(balance.formatted);
+  const routeSupported = isBridgeSupported(from.id) && isBridgeSupported(to.id);
+  const busy = sending || confirming;
 
   const cta = useMemo(() => {
     if (!isConnected) return { label: "Connect wallet", disabled: false };
+    if (!routeSupported)
+      return { label: "Route not supported (testnet only)", disabled: true };
     if (!amount || numAmount <= 0) return { label: "Enter an amount", disabled: true };
     if (needsSwitch)
       return { label: `Switch to ${from.name}`, disabled: false, action: "switch" as const };
     if (insufficientBalance)
       return { label: `Insufficient ${balance?.symbol}`, disabled: true };
+    if (sending) return { label: "Confirm in wallet…", disabled: true };
+    if (confirming) return { label: "Bridging…", disabled: true };
     return { label: `Bridge to ${to.name}`, disabled: false, action: "bridge" as const };
-  }, [isConnected, amount, numAmount, needsSwitch, insufficientBalance, balance, from, to]);
+  }, [
+    isConnected,
+    routeSupported,
+    amount,
+    numAmount,
+    needsSwitch,
+    insufficientBalance,
+    balance,
+    sending,
+    confirming,
+    from,
+    to,
+  ]);
+
+  const handleBridge = () => {
+    if (!address) return;
+    const src = BRIDGE_CHAINS[from.id];
+    const dst = BRIDGE_CHAINS[to.id];
+    if (!src || !dst) {
+      toast.error("Unsupported route");
+      return;
+    }
+    try {
+      const value = parseEther(amount as `${number}`);
+      writeContract(
+        {
+          address: src.contract,
+          abi: BRIDGE_ABI,
+          functionName: "bridgeETH",
+          args: [dst.selector, address],
+          value,
+          chainId: src.chainId,
+        },
+        {
+          onSuccess: (hash) => {
+            toast.success("Transaction submitted", {
+              description: `${hash.slice(0, 10)}…${hash.slice(-6)}`,
+            });
+          },
+          onError: (err) => {
+            toast.error("Bridge failed", { description: err.message.split("\n")[0] });
+          },
+        },
+      );
+    } catch (e) {
+      toast.error("Invalid amount", {
+        description: e instanceof Error ? e.message : "Try a smaller amount",
+      });
+    }
+  };
+
 
   return (
     <div className="w-full max-w-[460px]">
