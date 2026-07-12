@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { BRIDGE_ABI, BRIDGE_CHAINS, isBridgeSupported } from "@/lib/bridge";
+import { BRIDGE_ABI, BRIDGE_CHAINS, getMessageIdFromReceipt, isBridgeSupported } from "@/lib/bridge";
 
 type ChainMeta = {
   id: number;
