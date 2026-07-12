@@ -146,11 +146,16 @@ export function BridgeCard() {
       toast.success("Bridge transaction confirmed", {
         description: "Funds will arrive on the destination chain shortly.",
       });
+      setConfirmedDialogOpen(true);
       refetchBalance();
-      setAmount("");
-      resetWrite();
     }
-  }, [confirmed, txHash, refetchBalance, resetWrite]);
+  }, [confirmed, txHash, refetchBalance]);
+
+  const closeConfirmedDialog = () => {
+    setConfirmedDialogOpen(false);
+    setAmount("");
+    resetWrite();
+  };
 
   const swap = () => {
     setFrom(to);
