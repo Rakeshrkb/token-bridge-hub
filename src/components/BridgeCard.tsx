@@ -347,8 +347,13 @@ export function BridgeCard() {
               <span className="text-sm font-semibold text-foreground">ETH</span>
             </div>
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">
-            ${numAmount > 0 ? (numAmount * 1800 * 0.9985).toFixed(2) : "0.00"}
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span>${numAmount > 0 ? (numAmount * 1800 * 0.9985).toFixed(2) : "0.00"}</span>
+            {destPoolBalance && (
+              <span className={cn(insufficientPool && "text-destructive")}>
+                Pool: {Number(destPoolBalance.formatted).toFixed(4)} {destPoolBalance.symbol}
+              </span>
+            )}
           </div>
         </div>
 
