@@ -200,6 +200,8 @@ export function BridgeCard() {
       return { label: `Switch to ${from.name}`, disabled: false, action: "switch" as const };
     if (insufficientBalance)
       return { label: `Insufficient ${balance?.symbol}`, disabled: true };
+    if (insufficientPool)
+      return { label: `Insufficient pool balance on ${to.name}`, disabled: true };
     if (sending) return { label: "Confirm in wallet…", disabled: true };
     if (confirming) return { label: "Bridging…", disabled: true };
     return { label: `Bridge to ${to.name}`, disabled: false, action: "bridge" as const };
@@ -210,6 +212,7 @@ export function BridgeCard() {
     numAmount,
     needsSwitch,
     insufficientBalance,
+    insufficientPool,
     balance,
     sending,
     confirming,
