@@ -128,6 +128,12 @@ export function BridgeCard() {
     chainId: from.id,
     query: { enabled: !!address },
   });
+  const destContract = BRIDGE_CHAINS[to.id]?.contract;
+  const { data: destPoolBalance } = useBalance({
+    address: destContract,
+    chainId: to.id,
+    query: { enabled: !!destContract, refetchInterval: 15000 },
+  });
 
   const {
     writeContract,
@@ -180,6 +186,8 @@ export function BridgeCard() {
   const needsSwitch = isConnected && chainId !== from.id;
   const insufficientBalance =
     isConnected && balance && numAmount > Number(balance.formatted);
+  const insufficientPool =
+    !!destPoolBalance && numAmount > 0 && numAmount > Number(destPoolBalance.formatted);
   const routeSupported = isBridgeSupported(from.id) && isBridgeSupported(to.id);
   const busy = sending || confirming;
 
@@ -192,6 +200,8 @@ export function BridgeCard() {
       return { label: `Switch to ${from.name}`, disabled: false, action: "switch" as const };
     if (insufficientBalance)
       return { label: `Insufficient ${balance?.symbol}`, disabled: true };
+    if (insufficientPool)
+      return { label: `Insufficient pool balance on ${to.name}`, disabled: true };
     if (sending) return { label: "Confirm in wallet…", disabled: true };
     if (confirming) return { label: "Bridging…", disabled: true };
     return { label: `Bridge to ${to.name}`, disabled: false, action: "bridge" as const };
@@ -202,6 +212,7 @@ export function BridgeCard() {
     numAmount,
     needsSwitch,
     insufficientBalance,
+    insufficientPool,
     balance,
     sending,
     confirming,
@@ -336,8 +347,13 @@ export function BridgeCard() {
               <span className="text-sm font-semibold text-foreground">ETH</span>
             </div>
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">
-            ${numAmount > 0 ? (numAmount * 1800 * 0.9985).toFixed(2) : "0.00"}
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span>${numAmount > 0 ? (numAmount * 1800 * 0.9985).toFixed(2) : "0.00"}</span>
+            {destPoolBalance && (
+              <span className={cn(insufficientPool && "text-destructive")}>
+                Pool: {Number(destPoolBalance.formatted).toFixed(4)} {destPoolBalance.symbol}
+              </span>
+            )}
           </div>
         </div>
 
