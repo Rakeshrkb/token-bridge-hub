@@ -317,7 +317,12 @@ export function BridgeCard() {
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>${numAmount > 0 ? (numAmount * 1800).toFixed(2) : "0.00"}</span>
+            <span>
+              ${numAmount > 0 ? (numAmount * ethPrice).toFixed(2) : "0.00"}
+              {priceLoading && (
+                <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+              )}
+            </span>
             {isConnected && balance && (
               <button
                 onClick={() => setAmount(balance.formatted)}
