@@ -10,6 +10,7 @@ import {
 } from "wagmi";
 import { sepolia, baseSepolia } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,15 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { BRIDGE_ABI, BRIDGE_CHAINS, getMessageIdFromReceipt, isBridgeSupported } from "@/lib/bridge";
+
+async function fetchEthPrice(): Promise<number> {
+  const res = await fetch(
+    "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+  );
+  if (!res.ok) throw new Error("Failed to fetch ETH price");
+  const data = await res.json();
+  return data.ethereum.usd as number;
+}
 
 type ChainMeta = {
   id: number;
@@ -120,6 +130,13 @@ export function BridgeCard() {
   const [amount, setAmount] = useState("");
   const [confirmedDialogOpen, setConfirmedDialogOpen] = useState(false);
   const [messageId, setMessageId] = useState<`0x${string}` | null>(null);
+
+  const { data: ethPrice = 1800, isLoading: priceLoading } = useQuery({
+    queryKey: ["eth-price"],
+    queryFn: fetchEthPrice,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
 
   const { address, isConnected, chainId } = useAccount();
   const { switchChain, isPending: switching } = useSwitchChain();
@@ -300,7 +317,12 @@ export function BridgeCard() {
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>${numAmount > 0 ? (numAmount * 1800).toFixed(2) : "0.00"}</span>
+            <span>
+              ${numAmount > 0 ? (numAmount * ethPrice).toFixed(2) : "0.00"}
+              {priceLoading && (
+                <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+              )}
+            </span>
             {isConnected && balance && (
               <button
                 onClick={() => setAmount(balance.formatted)}
@@ -348,7 +370,12 @@ export function BridgeCard() {
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>${numAmount > 0 ? (numAmount * 1800 * 0.9985).toFixed(2) : "0.00"}</span>
+            <span>
+              ${numAmount > 0 ? (numAmount * ethPrice * 0.9985).toFixed(2) : "0.00"}
+              {priceLoading && (
+                <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+              )}
+            </span>
             {destPoolBalance && (
               <span className={cn(insufficientPool && "text-destructive")}>
                 Pool: {Number(destPoolBalance.formatted).toFixed(4)} {destPoolBalance.symbol}
