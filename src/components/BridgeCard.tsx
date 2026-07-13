@@ -494,9 +494,50 @@ export function BridgeCard() {
         </DialogContent>
       </Dialog>
 
-      <p className="mt-4 text-center text-xs text-muted-foreground">
-        Testnet bridging · Powered by Chainlink CCIP
-      </p>
+      <p className="mt-4 text-center text-xs text-muted-foreground space-y-1">
+  <span className="block">
+    Testnet bridging · Powered by Chainlink CCIP
+  </span>
+
+  <span className="inline-flex items-center gap-2">
+    Built by Rakesh Kumar Barik
+
+    {/* LinkedIn */}
+    <a
+      href="https://www.linkedin.com/in/rakeshkumarbarik"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-muted-foreground hover:text-blue-600 transition-colors"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className="h-4 w-4"
+      >
+        <path d="M20.45 20.45h-3.554v-5.569c0-1.328-.027-3.036-1.851-3.036-1.852 0-2.136 1.445-2.136 2.939v5.666H9.355V9h3.414v1.561h.049c.476-.9 1.637-1.851 3.37-1.851 3.604 0 4.269 2.373 4.269 5.455v6.285zM5.337 7.433a2.062 2.062 0 11.001-4.124 2.062 2.062 0 01-.001 4.124zM6.814 20.45H3.861V9h2.953v11.45z"/>
+      </svg>
+    </a>
+
+    {/* GitHub */}
+    <a
+      href="https://github.com/Rakeshrkb"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className="h-4 w-4"
+      >
+        <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.424 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.866-.014-1.7-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.607.069-.607 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.091-.647.35-1.088.636-1.338-2.22-.254-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.254-.446-1.275.098-2.659 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.384.203 2.405.1 2.659.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.694-4.566 4.944.359.31.678.92.678 1.855 0 1.338-.012 2.418-.012 2.747 0 .268.18.58.688.481A10.02 10.02 0 0022 12.017C22 6.484 17.523 2 12 2z"/>
+      </svg>
+    </a>
+  </span>
+</p>
+      
     </div>
   );
 }

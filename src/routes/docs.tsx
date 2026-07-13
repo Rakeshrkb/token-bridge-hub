@@ -269,6 +269,29 @@ function DocsPage() {
               </a>
             </div>
           </section>
+          <section>
+            <h2 className="text-xl font-semibold text-foreground">Owner</h2>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <a
+                href="https://github.com/Rakeshrkb"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-secondary/40 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+              >
+                <Github className="h-4 w-4" />
+                Rakesh GitHub
+              </a>
+              <a
+                href="https://www.linkedin.com/in/rakeshkumarbarik"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-secondary/40 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Rakesh LinkedIn
+              </a>
+            </div>
+          </section>
         </div>
       </main>
     </div>
