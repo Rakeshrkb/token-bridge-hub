@@ -10,6 +10,7 @@ import {
 } from "wagmi";
 import { sepolia, baseSepolia } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +23,15 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { BRIDGE_ABI, BRIDGE_CHAINS, getMessageIdFromReceipt, isBridgeSupported } from "@/lib/bridge";
+
+async function fetchEthPrice(): Promise<number> {
+  const res = await fetch(
+    "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+  );
+  if (!res.ok) throw new Error("Failed to fetch ETH price");
+  const data = await res.json();
+  return data.ethereum.usd as number;
+}
 
 type ChainMeta = {
   id: number;
