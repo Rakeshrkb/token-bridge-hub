@@ -131,6 +131,13 @@ export function BridgeCard() {
   const [confirmedDialogOpen, setConfirmedDialogOpen] = useState(false);
   const [messageId, setMessageId] = useState<`0x${string}` | null>(null);
 
+  const { data: ethPrice = 1800, isLoading: priceLoading } = useQuery({
+    queryKey: ["eth-price"],
+    queryFn: fetchEthPrice,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+
   const { address, isConnected, chainId } = useAccount();
   const { switchChain, isPending: switching } = useSwitchChain();
   const { data: balance, refetch: refetchBalance } = useBalance({
