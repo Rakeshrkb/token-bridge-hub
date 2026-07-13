@@ -8,7 +8,7 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
-import { sepolia, baseSepolia, mainnet, base, arbitrum, optimism, polygon } from "wagmi/chains";
+import { sepolia, baseSepolia } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,30 +29,29 @@ type ChainMeta = {
   short: string;
   color: string;
   testnet?: boolean;
+  logo?: string;
 };
 
 const CHAINS: ChainMeta[] = [
-  { id: sepolia.id, name: "Sepolia", short: "SEP", color: "#627EEA", testnet: true },
-  { id: baseSepolia.id, name: "Base Sepolia", short: "BASE", color: "#0052FF", testnet: true },
-  { id: mainnet.id, name: "Ethereum", short: "ETH", color: "#627EEA" },
-  { id: base.id, name: "Base", short: "BASE", color: "#0052FF" },
-  { id: arbitrum.id, name: "Arbitrum", short: "ARB", color: "#28A0F0" },
-  { id: optimism.id, name: "Optimism", short: "OP", color: "#FF0420" },
-  { id: polygon.id, name: "Polygon", short: "MATIC", color: "#8247E5" },
+  { id: sepolia.id, name: "Sepolia", short: "SEP", color: "#627EEA", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png" },
+  { id: baseSepolia.id, name: "Base Sepolia", short: "BASE", color: "#0052FF", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png" },
 ];
 
 function ChainBadge({ chain, size = 32 }: { chain: ChainMeta; size?: number }) {
   return (
     <div
-      className="flex items-center justify-center rounded-full font-bold text-white shrink-0"
+      className="flex items-center justify-center rounded-full shrink-0 overflow-hidden bg-white dark:bg-neutral-900 border border-border/50"
       style={{
         width: size,
         height: size,
-        background: `linear-gradient(135deg, ${chain.color}, ${chain.color}cc)`,
-        fontSize: size * 0.34,
       }}
     >
-      {chain.short.slice(0, 2)}
+      <img
+        src={chain.logo}
+        alt={chain.name}
+        onError={(e) => (e.currentTarget.style.display = "none")}
+        className="h-[70%] w-[70%] object-contain"
+      />
     </div>
   );
 }
@@ -279,14 +278,18 @@ export function BridgeCard() {
               className="min-w-0 flex-1 bg-transparent text-4xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/40"
             />
             <div className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#627EEA] text-[10px] font-bold text-white">
-                Ξ
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1">
+                <img
+                  src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
+                  alt="ETH"
+                  className="h-full w-full object-contain"
+                />
               </div>
               <span className="text-sm font-semibold text-foreground">ETH</span>
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>${numAmount > 0 ? (numAmount * 3200).toFixed(2) : "0.00"}</span>
+            <span>${numAmount > 0 ? (numAmount * 1800).toFixed(2) : "0.00"}</span>
             {isConnected && balance && (
               <button
                 onClick={() => setAmount(balance.formatted)}
@@ -323,14 +326,18 @@ export function BridgeCard() {
               {receiveAmount}
             </div>
             <div className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#627EEA] text-[10px] font-bold text-white">
-                Ξ
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1">
+                <img
+                  src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
+                  alt="ETH"
+                  className="h-full w-full object-contain"
+                />
               </div>
               <span className="text-sm font-semibold text-foreground">ETH</span>
             </div>
           </div>
           <div className="mt-2 text-xs text-muted-foreground">
-            ${numAmount > 0 ? (numAmount * 3200 * 0.9985).toFixed(2) : "0.00"}
+            ${numAmount > 0 ? (numAmount * 1800 * 0.9985).toFixed(2) : "0.00"}
           </div>
         </div>
 
