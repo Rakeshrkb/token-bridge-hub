@@ -186,6 +186,8 @@ export function BridgeCard() {
   const needsSwitch = isConnected && chainId !== from.id;
   const insufficientBalance =
     isConnected && balance && numAmount > Number(balance.formatted);
+  const insufficientPool =
+    !!destPoolBalance && numAmount > 0 && numAmount > Number(destPoolBalance.formatted);
   const routeSupported = isBridgeSupported(from.id) && isBridgeSupported(to.id);
   const busy = sending || confirming;
 
