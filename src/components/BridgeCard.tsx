@@ -198,7 +198,7 @@ export function BridgeCard() {
 
   const numAmount = Number(amount || "0");
   const receiveAmount = numAmount > 0 ? (numAmount * 0.9985).toFixed(6) : "0";
-  const fee = numAmount > 0 ? (numAmount * 0.0015).toFixed(6) : "0";
+  // const fee = numAmount > 0 ? (numAmount * 0.0015).toFixed(6) : "0";
 
   const needsSwitch = isConnected && chainId !== from.id;
   const insufficientBalance =
@@ -391,12 +391,13 @@ export function BridgeCard() {
               <Zap className="h-3 w-3 text-primary" />
               Est. time
             </span>
-            <span className="text-foreground">~15 seconds</span>
+            <span className="text-foreground">~15-20 minutes</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
             <span>Bridge fee</span>
             <span className="text-foreground">
-              {fee} ETH <span className="text-muted-foreground">(0.15%)</span>
+              {/* {fee} */}
+               paid By BridgeX
             </span>
           </div>
           <div className="flex justify-between text-muted-foreground">
