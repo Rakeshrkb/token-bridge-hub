@@ -49,6 +49,10 @@ export type BridgeChainConfig = {
   selector: bigint;
 };
 
+// The Sepolia bridge was deployed in this block. Activity queries start here so
+// we do not scan unrelated historical chain data.
+export const SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK = 11251875n;
+
 export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
   [sepolia.id]: {
     chainId: sepolia.id,
@@ -63,3 +67,7 @@ export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
 };
 
 export const isBridgeSupported = (chainId: number) => chainId in BRIDGE_CHAINS;
+
+export function getBridgeChainBySelector(selector: bigint): BridgeChainConfig | undefined {
+  return Object.values(BRIDGE_CHAINS).find((chain) => chain.selector === selector);
+}

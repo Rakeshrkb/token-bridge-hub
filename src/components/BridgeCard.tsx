@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownUp, ChevronDown, ExternalLink, Link2, Settings2, Zap } from "lucide-react";
-import { parseEther } from "viem";
+import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap } from "lucide-react";
+import { createPublicClient, formatEther, http, parseEther } from "viem";
 import {
   useAccount,
   useBalance,
@@ -22,7 +22,29 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { BRIDGE_ABI, BRIDGE_CHAINS, getMessageIdFromReceipt, isBridgeSupported } from "@/lib/bridge";
+import {
+  BRIDGE_ABI,
+  BRIDGE_CHAINS,
+  getBridgeChainBySelector,
+  getMessageIdFromReceipt,
+  isBridgeSupported,
+  SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+} from "@/lib/bridge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+const sepoliaClient = createPublicClient({
+  chain: sepolia,
+  // The chain's default public RPC does not reliably serve historical logs.
+  // This endpoint returns the small bridge-event history from the deployment block.
+  transport: http("https://sepolia.gateway.tenderly.co"),
+});
 
 async function fetchEthPrice(): Promise<number> {
   const res = await fetch(
@@ -46,6 +68,40 @@ const CHAINS: ChainMeta[] = [
   { id: sepolia.id, name: "Sepolia", short: "SEP", color: "#627EEA", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png" },
   { id: baseSepolia.id, name: "Base Sepolia", short: "BASE", color: "#0052FF", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png" },
 ];
+
+type BridgeActivity = {
+  messageId: `0x${string}`;
+  receiver: `0x${string}`;
+  amount: bigint;
+  destination: ChainMeta | undefined;
+  blockNumber: bigint;
+  transactionHash: `0x${string}`;
+};
+
+async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
+  const logs = await sepoliaClient.getLogs({
+    address: BRIDGE_CHAINS[sepolia.id].contract,
+    event: BRIDGE_ABI[1],
+    fromBlock: SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+  });
+
+  return logs
+    .filter((log) => log.args.receiver?.toLowerCase() === address.toLowerCase())
+    .map((log) => {
+      const destinationConfig = getBridgeChainBySelector(log.args.destinationChainSelector!);
+      const destination = CHAINS.find((chain) => chain.id === destinationConfig?.chainId);
+
+      return {
+        messageId: log.args.messageId!,
+        receiver: log.args.receiver!,
+        amount: log.args.amount!,
+        destination,
+        blockNumber: log.blockNumber,
+        transactionHash: log.transactionHash,
+      };
+    })
+    .sort((a, b) => Number(b.blockNumber - a.blockNumber));
+}
 
 function ChainBadge({ chain, size = 32 }: { chain: ChainMeta; size?: number }) {
   return (
@@ -130,6 +186,7 @@ export function BridgeCard() {
   const [amount, setAmount] = useState("");
   const [confirmedDialogOpen, setConfirmedDialogOpen] = useState(false);
   const [messageId, setMessageId] = useState<`0x${string}` | null>(null);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   const { data: ethPrice = 1800, isLoading: priceLoading } = useQuery({
     queryKey: ["eth-price"],
@@ -139,6 +196,16 @@ export function BridgeCard() {
   });
 
   const { address, isConnected, chainId } = useAccount();
+  const {
+    data: activity = [],
+    isFetching: activityLoading,
+    error: activityError,
+  } = useQuery({
+    queryKey: ["sepolia-bridge-activity", address],
+    queryFn: () => fetchSepoliaBridgeActivity(address!),
+    enabled: activityOpen && !!address,
+    staleTime: 30_000,
+  });
   const { switchChain, isPending: switching } = useSwitchChain();
   const { data: balance, refetch: refetchBalance } = useBalance({
     address,
@@ -280,8 +347,12 @@ export function BridgeCard() {
       <div className="relative rounded-3xl border border-border/60 bg-card/80 p-1.5 shadow-2xl shadow-primary/10 backdrop-blur-xl">
         {/* Header */}
         <div className="flex items-center justify-end px-4 pt-3 pb-2">
-          <button className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
-            <Settings2 className="h-4 w-4" />
+          <button
+            onClick={() => setActivityOpen(true)}
+            className="flex items-center gap-2 rounded-full px-3 py-2 text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground"
+          >
+            <History className="h-4 w-4" />
+            <span>Activity</span>
           </button>
         </div>
 
@@ -397,7 +468,7 @@ export function BridgeCard() {
             <span>Bridge fee</span>
             <span className="text-foreground">
               {/* {fee} */}
-               paid By BridgeX
+              paid By BridgeX
             </span>
           </div>
           <div className="flex justify-between text-muted-foreground">
@@ -494,50 +565,116 @@ export function BridgeCard() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={activityOpen} onOpenChange={setActivityOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Activity</DialogTitle>
+            <DialogDescription>
+              {address
+                ? "Recent cross-chain transactions"
+                : "Connect the wallet whose bridge transfers you want to view."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!address ? (
+            <div className="rounded-xl bg-secondary/40 p-5 text-sm text-muted-foreground">
+              Connect your wallet to load its bridge activity.
+            </div>
+          ) : activityLoading ? (
+            <div className="rounded-xl bg-secondary/40 p-5 text-sm text-muted-foreground">
+              Loading transfers from Sepolia…
+            </div>
+          ) : activityError ? (
+            <div className="rounded-xl bg-destructive/10 p-5 text-sm text-destructive">
+              Could not load bridge activity. Please try again.
+            </div>
+          ) : activity.length === 0 ? (
+            <div className="rounded-xl bg-secondary/40 p-5 text-sm text-muted-foreground">
+              No Sepolia bridge transfers found for this wallet.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>From</TableHead>
+                  <TableHead>To</TableHead>
+                  <TableHead>Receiver</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Transaction</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activity.map((transfer) => (
+                  <TableRow key={`${transfer.transactionHash}-${transfer.messageId}`}>
+                    <TableCell className="font-medium">Sepolia</TableCell>
+                    <TableCell>{transfer.destination?.name ?? "Unknown chain"}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {transfer.receiver.slice(0, 8)}…{transfer.receiver.slice(-6)}
+                    </TableCell>
+                    <TableCell>{formatEther(transfer.amount)} ETH</TableCell>
+                    <TableCell>
+                      <a
+                        href={`https://sepolia.etherscan.io/tx/${transfer.transactionHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        {transfer.transactionHash.slice(0, 8)}…{transfer.transactionHash.slice(-6)}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <p className="mt-4 text-center text-xs text-muted-foreground space-y-1">
-  <span className="block">
-    Testnet bridging · Powered by Chainlink CCIP
-  </span>
+        <span className="block">
+          Testnet bridging · Powered by Chainlink CCIP
+        </span>
 
-  <span className="inline-flex items-center gap-2">
-    Built by Rakesh Kumar Barik
+        <span className="inline-flex items-center gap-2">
+          Built by Rakesh Kumar Barik
 
-    {/* LinkedIn */}
-    <a
-      href="https://www.linkedin.com/in/rakeshkumarbarik"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-muted-foreground hover:text-blue-600 transition-colors"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        className="h-4 w-4"
-      >
-        <path d="M20.45 20.45h-3.554v-5.569c0-1.328-.027-3.036-1.851-3.036-1.852 0-2.136 1.445-2.136 2.939v5.666H9.355V9h3.414v1.561h.049c.476-.9 1.637-1.851 3.37-1.851 3.604 0 4.269 2.373 4.269 5.455v6.285zM5.337 7.433a2.062 2.062 0 11.001-4.124 2.062 2.062 0 01-.001 4.124zM6.814 20.45H3.861V9h2.953v11.45z"/>
-      </svg>
-    </a>
+          {/* LinkedIn */}
+          <a
+            href="https://www.linkedin.com/in/rakeshkumarbarik"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-blue-600 transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="h-4 w-4"
+            >
+              <path d="M20.45 20.45h-3.554v-5.569c0-1.328-.027-3.036-1.851-3.036-1.852 0-2.136 1.445-2.136 2.939v5.666H9.355V9h3.414v1.561h.049c.476-.9 1.637-1.851 3.37-1.851 3.604 0 4.269 2.373 4.269 5.455v6.285zM5.337 7.433a2.062 2.062 0 11.001-4.124 2.062 2.062 0 01-.001 4.124zM6.814 20.45H3.861V9h2.953v11.45z" />
+            </svg>
+          </a>
 
-    {/* GitHub */}
-    <a
-      href="https://github.com/Rakeshrkb"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-muted-foreground hover:text-foreground transition-colors"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        className="h-4 w-4"
-      >
-        <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.424 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.866-.014-1.7-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.607.069-.607 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.091-.647.35-1.088.636-1.338-2.22-.254-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.254-.446-1.275.098-2.659 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.384.203 2.405.1 2.659.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.694-4.566 4.944.359.31.678.92.678 1.855 0 1.338-.012 2.418-.012 2.747 0 .268.18.58.688.481A10.02 10.02 0 0022 12.017C22 6.484 17.523 2 12 2z"/>
-      </svg>
-    </a>
-  </span>
-</p>
-      
+          {/* GitHub */}
+          <a
+            href="https://github.com/Rakeshrkb"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="h-4 w-4"
+            >
+              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.424 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.866-.014-1.7-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.607.069-.607 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.091-.647.35-1.088.636-1.338-2.22-.254-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.254-.446-1.275.098-2.659 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.026 2.747-1.026.546 1.384.203 2.405.1 2.659.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.694-4.566 4.944.359.31.678.92.678 1.855 0 1.338-.012 2.418-.012 2.747 0 .268.18.58.688.481A10.02 10.02 0 0022 12.017C22 6.484 17.523 2 12 2z" />
+            </svg>
+          </a>
+        </span>
+      </p>
+
     </div>
   );
 }
