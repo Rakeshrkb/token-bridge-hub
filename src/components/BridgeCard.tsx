@@ -128,6 +128,12 @@ export function BridgeCard() {
     chainId: from.id,
     query: { enabled: !!address },
   });
+  const destContract = BRIDGE_CHAINS[to.id]?.contract;
+  const { data: destPoolBalance } = useBalance({
+    address: destContract,
+    chainId: to.id,
+    query: { enabled: !!destContract, refetchInterval: 15000 },
+  });
 
   const {
     writeContract,
