@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap, Droplet } from "lucide-react";
 import { createPublicClient, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
 import {
   useAccount,
@@ -25,17 +25,20 @@ import {
 import { cn } from "@/lib/utils";
 import {
   BRIDGE_ABI,
+  RATE_LIMITER_ABI,
   BRIDGE_CHAINS,
   BRIDGE_TOKENS,
   ERC20_ABI,
   NATIVE_TOKEN,
   ZERO_ADDRESS,
   getBridgeChainBySelector,
+  getTokenPoolAddress,
   getMessageIdFromReceipt,
   getTokenAddress,
   isBridgeSupported,
   SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
   type BridgeTokenMeta,
+  CROSS_TOKEN_ABI,
 } from "@/lib/bridge";
 import {
   Table,
@@ -206,6 +209,18 @@ export function BridgeCard() {
   });
 
   const { address, isConnected, chainId } = useAccount();
+
+  const {
+    writeContractAsync: faucetWriteAsync,
+    data: faucetTxHash,
+    reset: resetFaucetWrite,
+  } = useWriteContract();
+
+  const { isLoading: faucetConfirming, isSuccess: faucetConfirmed } =
+    useWaitForTransactionReceipt({
+      hash: faucetTxHash,
+      chainId: from.id,
+    });
   const {
     data: activity = [],
     isFetching: activityLoading,
@@ -216,12 +231,15 @@ export function BridgeCard() {
     enabled: activityOpen && !!address,
     staleTime: 30_000,
   });
-  const { switchChain, isPending: switching } = useSwitchChain();
+  const { switchChainAsync, isPending: switching } = useSwitchChain();
 
   const srcContract = BRIDGE_CHAINS[from.id]?.contract;
   const destContract = BRIDGE_CHAINS[to.id]?.contract;
   const srcTokenAddress = getTokenAddress(from.id, token.key);
   const destTokenAddress = getTokenAddress(to.id, token.key);
+  const [faucetSubmitting, setFaucetSubmitting] = useState(false);
+  const faucetBusy = faucetSubmitting || faucetConfirming;
+  const FAUCET_AMOUNT = 100; // 100 cross tokens
 
   // Native balance for wallet on source chain (used for ETH bridging + gas hint)
   const { data: nativeBalance, refetch: refetchNativeBalance } = useBalance({
@@ -242,6 +260,21 @@ export function BridgeCard() {
     },
   });
 
+  const crossTokenAddress = getTokenAddress(from.id, "CROSS");
+
+  const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
+    address: crossTokenAddress,
+    abi: CROSS_TOKEN_ABI,
+    functionName: "lastMint",
+    args: address ? [address] : undefined,
+    chainId: from.id,
+    query: { enabled: !!address && !!crossTokenAddress },
+  });
+
+  const faucetOnCooldown =
+    lastMintTime !== undefined &&
+    Date.now() / 1000 < Number(lastMintTime) + 3600;
+
   // Allowance for ERC20 towards bridge contract
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: srcTokenAddress && srcTokenAddress !== ZERO_ADDRESS ? srcTokenAddress : undefined,
@@ -261,22 +294,30 @@ export function BridgeCard() {
     chainId: to.id,
     query: { enabled: token.isNative && !!destContract, refetchInterval: 15000 },
   });
-  const { data: destErc20Pool } = useReadContract({
-    address:
-      destTokenAddress && destTokenAddress !== ZERO_ADDRESS ? destTokenAddress : undefined,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: destContract ? [destContract] : undefined,
-    chainId: to.id,
+
+  const srcTokenPoolAddress = !token.isNative
+    ? getTokenPoolAddress(from.id, token.key)
+    : undefined;
+
+  const { data: rateLimiterState, error: rateLimiterError } = useReadContract({
+    address: srcTokenPoolAddress,
+    abi: RATE_LIMITER_ABI,
+    functionName: "getCurrentRateLimiterState",
+    args: BRIDGE_CHAINS[to.id]?.selector
+      ? [BRIDGE_CHAINS[to.id].selector, false] // fastFinality = false
+      : undefined,
+    chainId: from.id,
     query: {
-      enabled:
-        !token.isNative &&
-        !!destContract &&
-        !!destTokenAddress &&
-        destTokenAddress !== ZERO_ADDRESS,
+      enabled: !token.isNative && !!srcTokenPoolAddress && !!BRIDGE_CHAINS[to.id]?.selector,
       refetchInterval: 15000,
     },
   });
+
+  const outboundState = rateLimiterState ? (rateLimiterState as any)[0] : undefined;
+
+  const availableCapacity = outboundState ? (outboundState.tokens as bigint) : undefined;
+  const rateLimitEnabled = outboundState ? (outboundState.isEnabled as boolean) : false;
+
 
   const walletBalanceRaw: bigint | undefined = token.isNative
     ? nativeBalance?.value
@@ -287,7 +328,7 @@ export function BridgeCard() {
 
   const destPoolRaw: bigint | undefined = token.isNative
     ? destNativePool?.value
-    : (destErc20Pool as bigint | undefined);
+    : undefined; // (destErc20Pool as bigint | undefined);
   const destPoolFormatted = destPoolRaw !== undefined
     ? formatUnits(destPoolRaw, token.decimals)
     : undefined;
@@ -356,7 +397,10 @@ export function BridgeCard() {
     walletBalanceRaw !== undefined &&
     parsedAmount > walletBalanceRaw;
   const insufficientPool =
-    destPoolRaw !== undefined && parsedAmount > 0n && parsedAmount > destPoolRaw;
+    token.isNative &&
+    destPoolRaw !== undefined &&
+    parsedAmount > 0n &&
+    parsedAmount > destPoolRaw;
   const routeSupported =
     isBridgeSupported(from.id) &&
     isBridgeSupported(to.id) &&
@@ -367,6 +411,18 @@ export function BridgeCard() {
     parsedAmount > 0n &&
     (allowance === undefined || (allowance as bigint) < parsedAmount);
   const busy = sending || confirming || approving;
+  const exceedsRateLimit =
+    rateLimitEnabled &&
+    availableCapacity !== undefined &&
+    parsedAmount > 0n &&
+    parsedAmount > availableCapacity;
+  console.log({
+    srcTokenPoolAddress,
+    outboundState,
+    availableCapacity,
+    rateLimitEnabled,
+    exceedsRateLimit,
+  });
 
   const cta = useMemo(() => {
     if (!isConnected) return { label: "Connect wallet", disabled: false };
@@ -383,10 +439,17 @@ export function BridgeCard() {
     if (approving) return { label: "Approving…", disabled: true };
     if (sending) return { label: "Confirm in wallet…", disabled: true };
     if (confirming) return { label: "Bridging…", disabled: true };
+    if (exceedsRateLimit)
+      return {
+        label: `Max ${formatUnits(availableCapacity as bigint, token.decimals)} ${token.symbol} available right now`,
+        disabled: true,
+      };
     if (needsApproval)
       return { label: `Approve ${token.symbol}`, disabled: false, action: "approve" as const };
     return { label: `Bridge to ${to.name}`, disabled: false, action: "bridge" as const };
   }, [
+    exceedsRateLimit,
+    availableCapacity,
     isConnected,
     routeSupported,
     amount,
@@ -428,6 +491,46 @@ export function BridgeCard() {
       setApproving(false);
     }
   };
+
+  const handleFaucetMint = async () => {
+    const crossToken = BRIDGE_TOKENS.find((t) => t.key === "CROSS");
+    if (!crossToken || !crossTokenAddress) return;
+
+    if (chainId !== from.id) {
+      await switchChainAsync({ chainId: from.id });
+    }
+
+    // Switch the selected token to CROSS so balance/UI reflects the mint
+    if (token.key !== "CROSS") setToken(crossToken);
+
+    try {
+      setFaucetSubmitting(true);
+      await faucetWriteAsync({
+        address: crossTokenAddress,
+        abi: CROSS_TOKEN_ABI,
+        functionName: "mintFaucet",
+        chainId: from.id,
+      });
+    } catch (e) {
+      toast.error("Faucet mint failed", {
+        description: e instanceof Error ? e.message.split("\n")[0] : "Try again",
+      });
+    } finally {
+      setFaucetSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (faucetConfirmed) {
+      toast.success("Faucet mint confirmed", {
+        description: `${FAUCET_AMOUNT} ${token.symbol} added to your wallet`,
+      });
+      refetchErc20Balance();
+      refetchLastMint();
+      resetFaucetWrite();
+    }
+  }, [faucetConfirmed]);
+
 
   const handleBridge = () => {
     if (!address) return;
@@ -479,7 +582,29 @@ export function BridgeCard() {
     <div className="w-full max-w-[460px]">
       <div className="relative rounded-3xl border border-border/60 bg-card/80 p-1.5 shadow-2xl shadow-primary/10 backdrop-blur-xl">
         {/* Header */}
-        <div className="flex items-center justify-end px-4 pt-3 pb-2">
+        <div className="flex items-center justify-end gap-1 px-4 pt-3 pb-2">
+          {isConnected && (
+            <button
+              onClick={handleFaucetMint}
+              disabled={faucetBusy || faucetOnCooldown}
+              className={cn(
+                "flex items-center gap-2 rounded-full px-3 py-2 text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground disabled:hover:bg-transparent",
+                faucetBusy && "animate-pulse text-primary",
+                faucetOnCooldown && !faucetBusy && "opacity-50",
+              )}
+            >
+              <Droplet className={cn("h-4 w-4", faucetBusy && "animate-pulse")} />
+              <span>
+                {faucetSubmitting
+                  ? "Confirm in wallet…"
+                  : faucetConfirming
+                    ? "Minting…"
+                    : faucetOnCooldown
+                      ? "Faucet on cooldown"
+                      : "Get CROSS"}
+              </span>
+            </button>
+          )}
           <button
             onClick={() => setActivityOpen(true)}
             className="flex items-center gap-2 rounded-full px-3 py-2 text-muted-foreground transition-colors hover:bg-secondary/80 hover:text-foreground"
@@ -538,14 +663,21 @@ export function BridgeCard() {
                 <span className="opacity-60">Testnet token</span>
               )}
             </span>
-            {isConnected && walletBalanceFormatted !== undefined && (
-              <button
-                onClick={() => setAmount(walletBalanceFormatted)}
-                className="rounded-md px-1.5 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10"
-              >
-                Balance: {Number(walletBalanceFormatted).toFixed(4)} {token.symbol} · Max
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {!token.isNative && rateLimitEnabled && availableCapacity !== undefined && (
+                <span className={cn(exceedsRateLimit && "text-destructive")}>
+                  Per Tx: {formatUnits(availableCapacity, token.decimals)} {token.symbol}
+                </span>
+              )}
+              {isConnected && walletBalanceFormatted !== undefined && (
+                <button
+                  onClick={() => setAmount(walletBalanceFormatted)}
+                  className="rounded-md px-1.5 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10"
+                >
+                  Balance: {Number(walletBalanceFormatted).toFixed(4)} {token.symbol} · Max
+                </button>
+              )}
+            </div>
           </div>
 
         </div>
@@ -651,7 +783,7 @@ export function BridgeCard() {
               size="lg"
               disabled={cta.disabled || switching || busy}
               onClick={() => {
-                if (cta.action === "switch") switchChain({ chainId: from.id });
+                if (cta.action === "switch") switchChainAsync({ chainId: from.id });
                 else if (cta.action === "approve") handleApprove();
                 else if (cta.action === "bridge") handleBridge();
               }}

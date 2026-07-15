@@ -26,6 +26,43 @@ export const BRIDGE_ABI = [
   },
 ] as const;
 
+
+export const RATE_LIMITER_ABI = [
+  {
+    type: "function",
+    name: "getCurrentRateLimiterState",
+    stateMutability: "view",
+    inputs: [
+      { name: "remoteChainSelector", type: "uint64" },
+      { name: "fastFinality", type: "bool" },
+    ],
+    outputs: [
+      {
+        name: "outboundRateLimiterState",
+        type: "tuple",
+        components: [
+          { name: "tokens", type: "uint128" },
+          { name: "lastUpdated", type: "uint32" },
+          { name: "isEnabled", type: "bool" },
+          { name: "capacity", type: "uint128" },
+          { name: "rate", type: "uint128" },
+        ],
+      },
+      {
+        name: "inboundRateLimiterState",
+        type: "tuple",
+        components: [
+          { name: "tokens", type: "uint128" },
+          { name: "lastUpdated", type: "uint32" },
+          { name: "isEnabled", type: "bool" },
+          { name: "capacity", type: "uint128" },
+          { name: "rate", type: "uint128" },
+        ],
+      },
+    ],
+  },
+] as const;
+
 export const ERC20_ABI = [
   {
     type: "function",
@@ -67,6 +104,24 @@ export const ERC20_ABI = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ name: "", type: "string" }],
+  },
+] as const;
+
+export const CROSS_TOKEN_ABI = [
+  ...ERC20_ABI,
+  {
+    type: "function",
+    name: "mintFaucet",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "lastMint",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ type: "uint256" }],
   },
 ] as const;
 
@@ -120,6 +175,24 @@ export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
   },
 };
 
+// Map: chainId -> tokenKey -> pool contract address
+export const TOKEN_POOLS: Record<number, Record<string, `0x${string}`>> = {
+  [sepolia.id]: {
+    CROSS: "0x25e9022beBac9001D1Cba2744cfdA068a78F75e9",
+    // add more tokens as needed
+  },
+  [baseSepolia.id]: {
+    CROSS: "0x2Cf54C4a8f5B442Fdfc455Be329B4B74580cb336",
+  },
+};
+
+export function getTokenPoolAddress(
+  chainId: number,
+  tokenKey: string,
+): `0x${string}` | undefined {
+  return TOKEN_POOLS[chainId]?.[tokenKey];
+}
+
 export type BridgeTokenMeta = {
   key: string; // logical key, e.g. "ETH" or "CROSS"
   symbol: string;
@@ -146,6 +219,7 @@ export const BRIDGE_TOKENS: BridgeTokenMeta[] = [
     name: "CCIPToken",
     isNative: false,
     decimals: 18,
+    logo: "https://assets.coingecko.com/coins/images/877/standard/Chainlink_Logo_500.png?1760023405"
   },
 ];
 
