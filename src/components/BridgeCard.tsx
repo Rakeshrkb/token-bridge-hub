@@ -674,6 +674,55 @@ export function BridgeCard() {
         </a>
       )}
 
+      <Dialog open={tokenPickerOpen} onOpenChange={setTokenPickerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select token to bridge</DialogTitle>
+          </DialogHeader>
+          <div className="mt-2 flex flex-col gap-1">
+            {BRIDGE_TOKENS.map((t) => {
+              const availableOnRoute =
+                !!getTokenAddress(from.id, t.key) && !!getTokenAddress(to.id, t.key);
+              return (
+                <button
+                  key={t.key}
+                  disabled={!availableOnRoute}
+                  onClick={() => {
+                    setToken(t);
+                    setTokenPickerOpen(false);
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40",
+                    t.key === token.key && "bg-secondary",
+                  )}
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1 border border-border/50">
+                    <img
+                      src={t.logo}
+                      alt={t.symbol}
+                      onError={(e) => (e.currentTarget.style.display = "none")}
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-foreground">{t.symbol}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {t.isNative ? "Native ETH · lock & release" : "ERC-20 · CCIP token pool"}
+                    </div>
+                  </div>
+                  {!availableOnRoute && (
+                    <span className="text-[10px] uppercase text-muted-foreground">
+                      Unavailable
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
       <Dialog open={confirmedDialogOpen} onOpenChange={setConfirmedDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
