@@ -509,33 +509,45 @@ export function BridgeCard() {
               }}
               className="min-w-0 flex-1 bg-transparent text-4xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/40"
             />
-            <div className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2">
+            <button
+              onClick={() => setTokenPickerOpen(true)}
+              className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2 transition-colors hover:bg-background"
+            >
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1">
                 <img
-                  src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
-                  alt="ETH"
+                  src={token.logo}
+                  alt={token.symbol}
+                  onError={(e) => (e.currentTarget.style.display = "none")}
                   className="h-full w-full object-contain"
                 />
               </div>
-              <span className="text-sm font-semibold text-foreground">ETH</span>
-            </div>
+              <span className="text-sm font-semibold text-foreground">{token.symbol}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              ${numAmount > 0 ? (numAmount * ethPrice).toFixed(2) : "0.00"}
-              {priceLoading && (
-                <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+              {token.isNative ? (
+                <>
+                  ${numAmount > 0 ? (numAmount * ethPrice).toFixed(2) : "0.00"}
+                  {priceLoading && (
+                    <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+                  )}
+                </>
+              ) : (
+                <span className="opacity-60">Testnet token</span>
               )}
             </span>
-            {isConnected && balance && (
+            {isConnected && walletBalanceFormatted !== undefined && (
               <button
-                onClick={() => setAmount(balance.formatted)}
+                onClick={() => setAmount(walletBalanceFormatted)}
                 className="rounded-md px-1.5 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10"
               >
-                Balance: {Number(balance.formatted).toFixed(4)} {balance.symbol} · Max
+                Balance: {Number(walletBalanceFormatted).toFixed(4)} {token.symbol} · Max
               </button>
             )}
           </div>
+
         </div>
 
         {/* Swap button */}
