@@ -652,6 +652,7 @@ export function BridgeCard() {
               disabled={cta.disabled || switching || busy}
               onClick={() => {
                 if (cta.action === "switch") switchChain({ chainId: from.id });
+                else if (cta.action === "approve") handleApprove();
                 else if (cta.action === "bridge") handleBridge();
               }}
               className="h-14 w-full rounded-2xl text-base font-semibold"
