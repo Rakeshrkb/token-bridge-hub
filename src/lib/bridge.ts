@@ -107,7 +107,7 @@ export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
     contract: "0x4133727299A02942Ca9a3e18fD11D95DCa3dAdD3",
     selector: 16015286601757825753n,
     tokens: {
-      BnM: "0x334aE912E59ec7cAe23A12d631cFb6F4889dB80F",
+      CROSS: "0x334aE912E59ec7cAe23A12d631cFb6F4889dB80F",
     },
   },
   [baseSepolia.id]: {
@@ -115,14 +115,15 @@ export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
     contract: "0x3e4Fe7d25dE550bEacFC185a7fef83270717eEaA",
     selector: 10344971235874465080n,
     tokens: {
-      BnM: "0x47b341EB45FC6E69Eee17bD6D85d82CC56ad6624",
+      CROSS: "0x47b341EB45FC6E69Eee17bD6D85d82CC56ad6624",
     },
   },
 };
 
 export type BridgeTokenMeta = {
-  key: string; // logical key, e.g. "ETH" or "BnM"
+  key: string; // logical key, e.g. "ETH" or "CROSS"
   symbol: string;
+  name: string;
   isNative: boolean;
   decimals: number;
   logo?: string;
@@ -131,6 +132,7 @@ export type BridgeTokenMeta = {
 export const NATIVE_TOKEN: BridgeTokenMeta = {
   key: "ETH",
   symbol: "ETH",
+  name: "Ethereum",
   isNative: true,
   decimals: 18,
   logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
@@ -139,11 +141,11 @@ export const NATIVE_TOKEN: BridgeTokenMeta = {
 export const BRIDGE_TOKENS: BridgeTokenMeta[] = [
   NATIVE_TOKEN,
   {
-    key: "BnM",
-    symbol: "CCIP-BnM",
+    key: "CROSS",
+    symbol: "CROSS",
+    name: "CCIPToken",
     isNative: false,
     decimals: 18,
-    logo: "https://smartcontract.imgix.net/tokens/ccip-bnm.webp?auto=compress%2Cformat",
   },
 ];
 
