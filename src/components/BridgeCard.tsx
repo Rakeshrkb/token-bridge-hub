@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap } from "lucide-react";
-import { createPublicClient, formatEther, http, parseEther } from "viem";
+import { createPublicClient, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
 import {
   useAccount,
   useBalance,
+  useReadContract,
   useSwitchChain,
   useWaitForTransactionReceipt,
   useWriteContract,
@@ -25,10 +26,16 @@ import { cn } from "@/lib/utils";
 import {
   BRIDGE_ABI,
   BRIDGE_CHAINS,
+  BRIDGE_TOKENS,
+  ERC20_ABI,
+  NATIVE_TOKEN,
+  ZERO_ADDRESS,
   getBridgeChainBySelector,
   getMessageIdFromReceipt,
+  getTokenAddress,
   isBridgeSupported,
   SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+  type BridgeTokenMeta,
 } from "@/lib/bridge";
 import {
   Table,
