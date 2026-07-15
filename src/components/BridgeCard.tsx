@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap } from "lucide-react";
-import { createPublicClient, formatEther, http, parseEther } from "viem";
+import { createPublicClient, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
 import {
   useAccount,
   useBalance,
+  useReadContract,
   useSwitchChain,
   useWaitForTransactionReceipt,
   useWriteContract,
@@ -25,10 +26,16 @@ import { cn } from "@/lib/utils";
 import {
   BRIDGE_ABI,
   BRIDGE_CHAINS,
+  BRIDGE_TOKENS,
+  ERC20_ABI,
+  NATIVE_TOKEN,
+  ZERO_ADDRESS,
   getBridgeChainBySelector,
   getMessageIdFromReceipt,
+  getTokenAddress,
   isBridgeSupported,
   SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+  type BridgeTokenMeta,
 } from "@/lib/bridge";
 import {
   Table,
@@ -183,10 +190,13 @@ function ChainPicker({
 export function BridgeCard() {
   const [from, setFrom] = useState<ChainMeta>(CHAINS[0]);
   const [to, setTo] = useState<ChainMeta>(CHAINS[1]);
+  const [token, setToken] = useState<BridgeTokenMeta>(NATIVE_TOKEN);
+  const [tokenPickerOpen, setTokenPickerOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [confirmedDialogOpen, setConfirmedDialogOpen] = useState(false);
   const [messageId, setMessageId] = useState<`0x${string}` | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [approving, setApproving] = useState(false);
 
   const { data: ethPrice = 1800, isLoading: priceLoading } = useQuery({
     queryKey: ["eth-price"],
@@ -207,20 +217,84 @@ export function BridgeCard() {
     staleTime: 30_000,
   });
   const { switchChain, isPending: switching } = useSwitchChain();
-  const { data: balance, refetch: refetchBalance } = useBalance({
+
+  const srcContract = BRIDGE_CHAINS[from.id]?.contract;
+  const destContract = BRIDGE_CHAINS[to.id]?.contract;
+  const srcTokenAddress = getTokenAddress(from.id, token.key);
+  const destTokenAddress = getTokenAddress(to.id, token.key);
+
+  // Native balance for wallet on source chain (used for ETH bridging + gas hint)
+  const { data: nativeBalance, refetch: refetchNativeBalance } = useBalance({
     address,
     chainId: from.id,
     query: { enabled: !!address },
   });
-  const destContract = BRIDGE_CHAINS[to.id]?.contract;
-  const { data: destPoolBalance } = useBalance({
+
+  // ERC20 balance for wallet on source chain
+  const { data: erc20WalletBalance, refetch: refetchErc20Balance } = useReadContract({
+    address: srcTokenAddress && srcTokenAddress !== ZERO_ADDRESS ? srcTokenAddress : undefined,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    chainId: from.id,
+    query: {
+      enabled: !token.isNative && !!address && !!srcTokenAddress && srcTokenAddress !== ZERO_ADDRESS,
+    },
+  });
+
+  // Allowance for ERC20 towards bridge contract
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: srcTokenAddress && srcTokenAddress !== ZERO_ADDRESS ? srcTokenAddress : undefined,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: address && srcContract ? [address, srcContract] : undefined,
+    chainId: from.id,
+    query: {
+      enabled:
+        !token.isNative && !!address && !!srcContract && !!srcTokenAddress && srcTokenAddress !== ZERO_ADDRESS,
+    },
+  });
+
+  // Destination pool balance — native or ERC20
+  const { data: destNativePool } = useBalance({
     address: destContract,
     chainId: to.id,
-    query: { enabled: !!destContract, refetchInterval: 15000 },
+    query: { enabled: token.isNative && !!destContract, refetchInterval: 15000 },
   });
+  const { data: destErc20Pool } = useReadContract({
+    address:
+      destTokenAddress && destTokenAddress !== ZERO_ADDRESS ? destTokenAddress : undefined,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: destContract ? [destContract] : undefined,
+    chainId: to.id,
+    query: {
+      enabled:
+        !token.isNative &&
+        !!destContract &&
+        !!destTokenAddress &&
+        destTokenAddress !== ZERO_ADDRESS,
+      refetchInterval: 15000,
+    },
+  });
+
+  const walletBalanceRaw: bigint | undefined = token.isNative
+    ? nativeBalance?.value
+    : (erc20WalletBalance as bigint | undefined);
+  const walletBalanceFormatted = walletBalanceRaw !== undefined
+    ? formatUnits(walletBalanceRaw, token.decimals)
+    : undefined;
+
+  const destPoolRaw: bigint | undefined = token.isNative
+    ? destNativePool?.value
+    : (destErc20Pool as bigint | undefined);
+  const destPoolFormatted = destPoolRaw !== undefined
+    ? formatUnits(destPoolRaw, token.decimals)
+    : undefined;
 
   const {
     writeContract,
+    writeContractAsync,
     data: txHash,
     isPending: sending,
     reset: resetWrite,
@@ -247,9 +321,11 @@ export function BridgeCard() {
         description: "Funds will arrive on the destination chain shortly.",
       });
       setConfirmedDialogOpen(true);
-      refetchBalance();
+      refetchNativeBalance();
+      refetchErc20Balance();
+      refetchAllowance();
     }
-  }, [confirmed, txHash, refetchBalance]);
+  }, [confirmed, txHash, refetchNativeBalance, refetchErc20Balance, refetchAllowance]);
 
   const closeConfirmedDialog = () => {
     setConfirmedDialogOpen(false);
@@ -265,44 +341,93 @@ export function BridgeCard() {
 
   const numAmount = Number(amount || "0");
   const receiveAmount = numAmount > 0 ? (numAmount * 0.9985).toFixed(6) : "0";
-  // const fee = numAmount > 0 ? (numAmount * 0.0015).toFixed(6) : "0";
+
+  let parsedAmount: bigint = 0n;
+  let parseErr = false;
+  try {
+    parsedAmount = amount ? parseUnits(amount as `${number}`, token.decimals) : 0n;
+  } catch {
+    parseErr = true;
+  }
 
   const needsSwitch = isConnected && chainId !== from.id;
   const insufficientBalance =
-    isConnected && balance && numAmount > Number(balance.formatted);
+    isConnected &&
+    walletBalanceRaw !== undefined &&
+    parsedAmount > walletBalanceRaw;
   const insufficientPool =
-    !!destPoolBalance && numAmount > 0 && numAmount > Number(destPoolBalance.formatted);
-  const routeSupported = isBridgeSupported(from.id) && isBridgeSupported(to.id);
-  const busy = sending || confirming;
+    destPoolRaw !== undefined && parsedAmount > 0n && parsedAmount > destPoolRaw;
+  const routeSupported =
+    isBridgeSupported(from.id) &&
+    isBridgeSupported(to.id) &&
+    !!srcTokenAddress &&
+    !!destTokenAddress;
+  const needsApproval =
+    !token.isNative &&
+    parsedAmount > 0n &&
+    (allowance === undefined || (allowance as bigint) < parsedAmount);
+  const busy = sending || confirming || approving;
 
   const cta = useMemo(() => {
     if (!isConnected) return { label: "Connect wallet", disabled: false };
     if (!routeSupported)
-      return { label: "Route not supported (testnet only)", disabled: true };
-    if (!amount || numAmount <= 0) return { label: "Enter an amount", disabled: true };
+      return { label: "Route not supported", disabled: true };
+    if (!amount || parseErr || parsedAmount <= 0n)
+      return { label: "Enter an amount", disabled: true };
     if (needsSwitch)
       return { label: `Switch to ${from.name}`, disabled: false, action: "switch" as const };
     if (insufficientBalance)
-      return { label: `Insufficient ${balance?.symbol}`, disabled: true };
+      return { label: `Insufficient ${token.symbol}`, disabled: true };
     if (insufficientPool)
       return { label: `Insufficient pool balance on ${to.name}`, disabled: true };
+    if (approving) return { label: "Approving…", disabled: true };
     if (sending) return { label: "Confirm in wallet…", disabled: true };
     if (confirming) return { label: "Bridging…", disabled: true };
+    if (needsApproval)
+      return { label: `Approve ${token.symbol}`, disabled: false, action: "approve" as const };
     return { label: `Bridge to ${to.name}`, disabled: false, action: "bridge" as const };
   }, [
     isConnected,
     routeSupported,
     amount,
-    numAmount,
+    parseErr,
+    parsedAmount,
     needsSwitch,
     insufficientBalance,
     insufficientPool,
-    balance,
+    approving,
     sending,
     confirming,
+    needsApproval,
+    token,
     from,
     to,
   ]);
+
+  const handleApprove = async () => {
+    if (!address || !srcContract || !srcTokenAddress) return;
+    try {
+      setApproving(true);
+      const hash = await writeContractAsync({
+        address: srcTokenAddress,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [srcContract, parsedAmount],
+        chainId: from.id,
+      });
+      toast.success("Approval submitted", {
+        description: `${hash.slice(0, 10)}…${hash.slice(-6)}`,
+      });
+      // Wait a beat then refetch allowance
+      setTimeout(() => refetchAllowance(), 1500);
+    } catch (e) {
+      toast.error("Approval failed", {
+        description: e instanceof Error ? e.message.split("\n")[0] : "Try again",
+      });
+    } finally {
+      setApproving(false);
+    }
+  };
 
   const handleBridge = () => {
     if (!address) return;
@@ -313,13 +438,19 @@ export function BridgeCard() {
       return;
     }
     try {
-      const value = parseEther(amount as `${number}`);
+      const isNative = token.isNative;
+      const tokenArg: `0x${string}` = isNative
+        ? ZERO_ADDRESS
+        : (srcTokenAddress as `0x${string}`);
+      const amountArg = isNative ? 0n : parsedAmount;
+      const value = isNative ? parseEther(amount as `${number}`) : 0n;
+
       writeContract(
         {
           address: src.contract,
           abi: BRIDGE_ABI,
-          functionName: "bridgeETH",
-          args: [dst.selector, address],
+          functionName: "bridge",
+          args: [dst.selector, address, tokenArg, amountArg],
           value,
           chainId: src.chainId,
         },
@@ -340,6 +471,8 @@ export function BridgeCard() {
       });
     }
   };
+
+
 
 
   return (
@@ -376,33 +509,45 @@ export function BridgeCard() {
               }}
               className="min-w-0 flex-1 bg-transparent text-4xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/40"
             />
-            <div className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2">
+            <button
+              onClick={() => setTokenPickerOpen(true)}
+              className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2 transition-colors hover:bg-background"
+            >
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1">
                 <img
-                  src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
-                  alt="ETH"
+                  src={token.logo}
+                  alt={token.symbol}
+                  onError={(e) => (e.currentTarget.style.display = "none")}
                   className="h-full w-full object-contain"
                 />
               </div>
-              <span className="text-sm font-semibold text-foreground">ETH</span>
-            </div>
+              <span className="text-sm font-semibold text-foreground">{token.symbol}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              ${numAmount > 0 ? (numAmount * ethPrice).toFixed(2) : "0.00"}
-              {priceLoading && (
-                <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+              {token.isNative ? (
+                <>
+                  ${numAmount > 0 ? (numAmount * ethPrice).toFixed(2) : "0.00"}
+                  {priceLoading && (
+                    <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+                  )}
+                </>
+              ) : (
+                <span className="opacity-60">Testnet token</span>
               )}
             </span>
-            {isConnected && balance && (
+            {isConnected && walletBalanceFormatted !== undefined && (
               <button
-                onClick={() => setAmount(balance.formatted)}
+                onClick={() => setAmount(walletBalanceFormatted)}
                 className="rounded-md px-1.5 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10"
               >
-                Balance: {Number(balance.formatted).toFixed(4)} {balance.symbol} · Max
+                Balance: {Number(walletBalanceFormatted).toFixed(4)} {token.symbol} · Max
               </button>
             )}
           </div>
+
         </div>
 
         {/* Swap button */}
@@ -432,27 +577,35 @@ export function BridgeCard() {
             <div className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1">
                 <img
-                  src="https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
-                  alt="ETH"
+                  src={token.logo}
+                  alt={token.symbol}
+                  onError={(e) => (e.currentTarget.style.display = "none")}
                   className="h-full w-full object-contain"
                 />
               </div>
-              <span className="text-sm font-semibold text-foreground">ETH</span>
+              <span className="text-sm font-semibold text-foreground">{token.symbol}</span>
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              ${numAmount > 0 ? (numAmount * ethPrice * 0.9985).toFixed(2) : "0.00"}
-              {priceLoading && (
-                <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+              {token.isNative ? (
+                <>
+                  ${numAmount > 0 ? (numAmount * ethPrice * 0.9985).toFixed(2) : "0.00"}
+                  {priceLoading && (
+                    <span className="ml-1 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-muted-foreground/40" />
+                  )}
+                </>
+              ) : (
+                <span className="opacity-60">Testnet token</span>
               )}
             </span>
-            {destPoolBalance && (
+            {destPoolFormatted !== undefined && (
               <span className={cn(insufficientPool && "text-destructive")}>
-                Pool: {Number(destPoolBalance.formatted).toFixed(4)} {destPoolBalance.symbol}
+                Pool: {Number(destPoolFormatted).toFixed(4)} {token.symbol}
               </span>
             )}
           </div>
+
         </div>
 
         {/* Details */}
@@ -499,6 +652,7 @@ export function BridgeCard() {
               disabled={cta.disabled || switching || busy}
               onClick={() => {
                 if (cta.action === "switch") switchChain({ chainId: from.id });
+                else if (cta.action === "approve") handleApprove();
                 else if (cta.action === "bridge") handleBridge();
               }}
               className="h-14 w-full rounded-2xl text-base font-semibold"
@@ -519,6 +673,55 @@ export function BridgeCard() {
           View transaction <ExternalLink className="h-3 w-3" />
         </a>
       )}
+
+      <Dialog open={tokenPickerOpen} onOpenChange={setTokenPickerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select token to bridge</DialogTitle>
+          </DialogHeader>
+          <div className="mt-2 flex flex-col gap-1">
+            {BRIDGE_TOKENS.map((t) => {
+              const availableOnRoute =
+                !!getTokenAddress(from.id, t.key) && !!getTokenAddress(to.id, t.key);
+              return (
+                <button
+                  key={t.key}
+                  disabled={!availableOnRoute}
+                  onClick={() => {
+                    setToken(t);
+                    setTokenPickerOpen(false);
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40",
+                    t.key === token.key && "bg-secondary",
+                  )}
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1 border border-border/50">
+                    <img
+                      src={t.logo}
+                      alt={t.symbol}
+                      onError={(e) => (e.currentTarget.style.display = "none")}
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-foreground">{t.symbol}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {t.isNative ? "Native ETH · lock & release" : "ERC-20 · CCIP token pool"}
+                    </div>
+                  </div>
+                  {!availableOnRoute && (
+                    <span className="text-[10px] uppercase text-muted-foreground">
+                      Unavailable
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       <Dialog open={confirmedDialogOpen} onOpenChange={setConfirmedDialogOpen}>
         <DialogContent className="max-w-sm">
