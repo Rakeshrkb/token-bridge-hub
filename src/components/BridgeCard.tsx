@@ -297,7 +297,7 @@ export function BridgeCard() {
     error: activityError,
   } = useQuery({
     queryKey: ["sepolia-bridge-activity", address],
-    queryFn: () => fetchSepoliaBridgeActivity(address!),
+    queryFn: () => fetchBridgeActivity(address!),
     enabled: activityOpen && !!address,
     staleTime: 30_000,
   });
