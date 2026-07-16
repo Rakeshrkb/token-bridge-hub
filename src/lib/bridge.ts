@@ -1,4 +1,4 @@
-import { sepolia, baseSepolia } from "wagmi/chains";
+import { sepolia, baseSepolia, polygonAmoy } from "wagmi/chains";
 import { decodeEventLog, type TransactionReceipt } from "viem";
 
 export const BRIDGE_ABI = [
@@ -18,9 +18,9 @@ export const BRIDGE_ABI = [
     type: "event",
     name: "Sent",
     inputs: [
-      { name: "messageId", type: "bytes32", indexed: false },
-      { name: "destinationChainSelector", type: "uint64", indexed: false },
-      { name: "receiver", type: "address", indexed: false },
+      { name: "messageId", type: "bytes32", indexed: true },
+      { name: "destinationChainSelector", type: "uint64", indexed: true },
+      { name: "receiver", type: "address", indexed: true },
       { name: "amount", type: "uint256", indexed: false },
     ],
   },
@@ -156,6 +156,7 @@ export type BridgeChainConfig = {
 // unrelated historical chain data.
 export const SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK = 11272807n;
 export const BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK = 44161057n;
+export const AMOY_BRIDGE_DEPLOYMENT_BLOCK = 42360736n; // TODO: update when deployed
 
 export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
   [sepolia.id]: {
@@ -172,6 +173,14 @@ export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
     selector: 10344971235874465080n,
     tokens: {
       CROSS: "0x47b341EB45FC6E69Eee17bD6D85d82CC56ad6624",
+    },
+  },
+  [polygonAmoy.id]: {
+    chainId: polygonAmoy.id,
+    contract: "0xE3Be36F99d9a1F253cBF669a72a12948902aF66C", // TODO: update when deployed
+    selector: 16281711391670634445n, // TODO: update when deployed
+    tokens: {
+      CROSS: "0x89bb27051790D2f51Ba6b7153447c9C7d3bBB6DF", // TODO: update when deployed
     },
   },
 };

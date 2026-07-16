@@ -9,7 +9,7 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
-import { sepolia, baseSepolia } from "wagmi/chains";
+import { sepolia, baseSepolia, polygonAmoy } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -38,6 +38,7 @@ import {
   isBridgeSupported,
   SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
   BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+  AMOY_BRIDGE_DEPLOYMENT_BLOCK,
   type BridgeTokenMeta,
   CROSS_TOKEN_ABI,
 } from "@/lib/bridge";
@@ -61,6 +62,11 @@ const baseSepoliaClient = createPublicClient({
   transport: http("https://base-sepolia.gateway.tenderly.co"),
 });
 
+const amoyClient = createPublicClient({
+  chain: polygonAmoy,
+  transport: http("https://polygon-amoy.gateway.tenderly.co"), // or your Infura endpoint
+});
+
 async function fetchEthPrice(): Promise<number> {
   const res = await fetch(
     "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
@@ -82,6 +88,7 @@ type ChainMeta = {
 const CHAINS: ChainMeta[] = [
   { id: sepolia.id, name: "Sepolia", short: "SEP", color: "#627EEA", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png" },
   { id: baseSepolia.id, name: "Base Sepolia", short: "BASE", color: "#0052FF", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png" },
+  { id: polygonAmoy.id, name: "Polygon Amoy", short: "AMOY", color: "#8247E5", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png" },
 ];
 
 type BridgeActivity = {
@@ -115,7 +122,28 @@ function resolveTokenMeta(chainId: number, tokenAddress: `0x${string}`) {
 const EXPLORERS: Record<number, string> = {
   [sepolia.id]: "https://sepolia.etherscan.io/tx/",
   [baseSepolia.id]: "https://sepolia.basescan.org/tx/",
+  [polygonAmoy.id]: "https://amoy.polygonscan.com/tx/",
 };
+
+const TRANSFER_TOPIC0 =
+  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+async function inferTokenFromReceipt(
+  client: any,
+  txHash: `0x${string}`,
+  bridgeContract: `0x${string}`,
+): Promise<`0x${string}`> {
+  const receipt = await client.getTransactionReceipt({ hash: txHash });
+  for (const log of receipt.logs) {
+    if (log.topics[0] !== TRANSFER_TOPIC0) continue;
+    // topics[2] is the indexed `to` address, left-padded to 32 bytes
+    const to = `0x${log.topics[2].slice(26)}`.toLowerCase();
+    if (to === bridgeContract.toLowerCase()) {
+      return log.address as `0x${string}`; // the ERC20 token contract itself
+    }
+  }
+  return ZERO_ADDRESS; // no Transfer into the bridge => it was native ETH
+}
 
 async function fetchChainBridgeActivity(
   client: any,
@@ -127,6 +155,7 @@ async function fetchChainBridgeActivity(
   const logs = await client.getLogs({
     address: contract,
     event: BRIDGE_ABI[1],
+    args: { receiver: address }, // RPC-side filter
     fromBlock,
   });
 
@@ -137,15 +166,12 @@ async function fetchChainBridgeActivity(
   // Decode token from tx input (Sent event does not include token address)
   const results = await Promise.all(
     matching.map(async (log: any) => {
-      let tokenAddress: `0x${string}` = ZERO_ADDRESS;
+      let tokenAddress: `0x${string}`;
       try {
-        const tx = await client.getTransaction({ hash: log.transactionHash });
-        const decoded = decodeFunctionData({ abi: BRIDGE_ABI, data: tx.input });
-        if (decoded.functionName === "bridge") {
-          tokenAddress = decoded.args[2] as `0x${string}`;
-        }
-      } catch {
-        // fall back to native
+        tokenAddress = await inferTokenFromReceipt(client, log.transactionHash, contract);
+      } catch (e) {
+        console.warn(`Could not determine token for tx ${log.transactionHash}:`, e);
+        tokenAddress = ZERO_ADDRESS; // fallback only after a real attempt, not a decode guess
       }
       const { symbol, decimals } = resolveTokenMeta(sourceChain.id, tokenAddress);
       const destinationConfig = getBridgeChainBySelector(log.args.destinationChainSelector!);
@@ -172,11 +198,17 @@ async function fetchChainBridgeActivity(
 async function fetchBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
   const sepoliaMeta = CHAINS.find((c) => c.id === sepolia.id)!;
   const baseMeta = CHAINS.find((c) => c.id === baseSepolia.id)!;
-  const [sep, base] = await Promise.all([
-    fetchChainBridgeActivity(sepoliaClient, sepoliaMeta, SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address).catch(() => []),
-    fetchChainBridgeActivity(baseSepoliaClient, baseMeta, BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address).catch(() => []),
+  const amoyMeta = CHAINS.find((c) => c.id === polygonAmoy.id)!;
+
+  const [sep, base, amoy] = await Promise.all([
+    fetchChainBridgeActivity(sepoliaClient, sepoliaMeta, SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address)
+      .catch((e) => { console.error("sepolia activity fetch failed:", e); return []; }),
+    fetchChainBridgeActivity(baseSepoliaClient, baseMeta, BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address)
+      .catch((e) => { console.error("base sepolia activity fetch failed:", e); return []; }),
+    fetchChainBridgeActivity(amoyClient, amoyMeta, AMOY_BRIDGE_DEPLOYMENT_BLOCK, address)
+      .catch((e) => { console.error("amoy activity fetch failed:", e); return []; }),
   ]);
-  return [...sep, ...base].sort((a, b) => {
+  return [...sep, ...base, ...amoy].sort((a, b) => {
     if (a.source.id !== b.source.id) return Number(b.blockNumber - a.blockNumber);
     return Number(b.blockNumber - a.blockNumber);
   });
@@ -486,13 +518,6 @@ export function BridgeCard() {
     availableCapacity !== undefined &&
     parsedAmount > 0n &&
     parsedAmount > availableCapacity;
-  console.log({
-    srcTokenPoolAddress,
-    outboundState,
-    availableCapacity,
-    rateLimitEnabled,
-    exceedsRateLimit,
-  });
 
   const cta = useMemo(() => {
     if (!isConnected) return { label: "Connect wallet", disabled: false };

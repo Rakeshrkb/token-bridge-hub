@@ -126,12 +126,12 @@ function DocsPage() {
                     <td className="px-4 py-3 font-mono text-muted-foreground">16015286601757825753</td>
                     <td className="px-4 py-3 font-mono text-primary">
                       <a
-                        href="https://sepolia.etherscan.io/address/0x730Db6e61E194951d8c4a43c2a9FF22b1fD2D36d"
+                        href="https://sepolia.etherscan.io/address/0x4133727299A02942Ca9a3e18fD11D95DCa3dAdD3"
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 hover:underline"
                       >
-                        0x730Db6e…D2D36d
+                        0x41337272…AdD3
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </td>
@@ -142,12 +142,12 @@ function DocsPage() {
                     <td className="px-4 py-3 font-mono text-muted-foreground">10344971235874465080</td>
                     <td className="px-4 py-3 font-mono text-primary">
                       <a
-                        href="https://sepolia.basescan.org/address/0xE3Be36F99d9a1F253cBF669a72a12948902aF66C"
+                        href="https://sepolia.basescan.org/address/0x3e4Fe7d25dE550bEacFC185a7fef83270717eEaA"
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 hover:underline"
                       >
-                        0xE3Be36F9…02aF66C
+                        0x3e4Fe7d2…eEaA
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </td>
