@@ -53,8 +53,12 @@ import {
 const sepoliaClient = createPublicClient({
   chain: sepolia,
   // The chain's default public RPC does not reliably serve historical logs.
-  // This endpoint returns the small bridge-event history from the deployment block.
   transport: http("https://sepolia.gateway.tenderly.co"),
+});
+
+const baseSepoliaClient = createPublicClient({
+  chain: baseSepolia,
+  transport: http("https://base-sepolia.gateway.tenderly.co"),
 });
 
 async function fetchEthPrice(): Promise<number> {
@@ -84,21 +88,66 @@ type BridgeActivity = {
   messageId: `0x${string}`;
   receiver: `0x${string}`;
   amount: bigint;
+  source: ChainMeta;
   destination: ChainMeta | undefined;
   blockNumber: bigint;
   transactionHash: `0x${string}`;
+  tokenSymbol: string;
+  tokenDecimals: number;
+  explorerTxUrl: string;
 };
 
-async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
-  const logs = await sepoliaClient.getLogs({
-    address: BRIDGE_CHAINS[sepolia.id].contract,
+function resolveTokenMeta(chainId: number, tokenAddress: `0x${string}`) {
+  if (tokenAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
+    return { symbol: NATIVE_TOKEN.symbol, decimals: NATIVE_TOKEN.decimals };
+  }
+  const chainTokens = BRIDGE_CHAINS[chainId]?.tokens ?? {};
+  const key = Object.keys(chainTokens).find(
+    (k) => chainTokens[k].toLowerCase() === tokenAddress.toLowerCase(),
+  );
+  if (key) {
+    const meta = BRIDGE_TOKENS.find((t) => t.key === key);
+    if (meta) return { symbol: meta.symbol, decimals: meta.decimals };
+  }
+  return { symbol: "TOKEN", decimals: 18 };
+}
+
+const EXPLORERS: Record<number, string> = {
+  [sepolia.id]: "https://sepolia.etherscan.io/tx/",
+  [baseSepolia.id]: "https://sepolia.basescan.org/tx/",
+};
+
+async function fetchChainBridgeActivity(
+  client: typeof sepoliaClient,
+  sourceChain: ChainMeta,
+  fromBlock: bigint,
+  address: `0x${string}`,
+): Promise<BridgeActivity[]> {
+  const contract = BRIDGE_CHAINS[sourceChain.id].contract;
+  const logs = await client.getLogs({
+    address: contract,
     event: BRIDGE_ABI[1],
-    fromBlock: SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+    fromBlock,
   });
 
-  return logs
-    .filter((log) => log.args.receiver?.toLowerCase() === address.toLowerCase())
-    .map((log) => {
+  const matching = logs.filter(
+    (log) => log.args.receiver?.toLowerCase() === address.toLowerCase(),
+  );
+
+  // Decode token from tx input (Sent event does not include token address)
+  const results = await Promise.all(
+    matching.map(async (log) => {
+      let tokenAddress: `0x${string}` = ZERO_ADDRESS;
+      try {
+        const tx = await client.getTransaction({ hash: log.transactionHash });
+        const decoded = decodeFunctionData({ abi: BRIDGE_ABI, data: tx.input });
+        if (decoded.functionName === "bridge") {
+          tokenAddress = decoded.args[2] as `0x${string}`;
+        }
+      } catch {
+        // fall back to native
+      }
+      const { symbol, decimals } = resolveTokenMeta(sourceChain.id, tokenAddress);
       const destinationConfig = getBridgeChainBySelector(log.args.destinationChainSelector!);
       const destination = CHAINS.find((chain) => chain.id === destinationConfig?.chainId);
 
@@ -106,13 +155,33 @@ async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<Bridg
         messageId: log.args.messageId!,
         receiver: log.args.receiver!,
         amount: log.args.amount!,
+        source: sourceChain,
         destination,
         blockNumber: log.blockNumber,
         transactionHash: log.transactionHash,
-      };
-    })
-    .sort((a, b) => Number(b.blockNumber - a.blockNumber));
+        tokenSymbol: symbol,
+        tokenDecimals: decimals,
+        explorerTxUrl: `${EXPLORERS[sourceChain.id]}${log.transactionHash}`,
+      } satisfies BridgeActivity;
+    }),
+  );
+
+  return results;
 }
+
+async function fetchBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
+  const sepoliaMeta = CHAINS.find((c) => c.id === sepolia.id)!;
+  const baseMeta = CHAINS.find((c) => c.id === baseSepolia.id)!;
+  const [sep, base] = await Promise.all([
+    fetchChainBridgeActivity(sepoliaClient, sepoliaMeta, SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address).catch(() => []),
+    fetchChainBridgeActivity(baseSepoliaClient, baseMeta, BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address).catch(() => []),
+  ]);
+  return [...sep, ...base].sort((a, b) => {
+    if (a.source.id !== b.source.id) return Number(b.blockNumber - a.blockNumber);
+    return Number(b.blockNumber - a.blockNumber);
+  });
+}
+
 
 function ChainBadge({ chain, size = 32 }: { chain: ChainMeta; size?: number }) {
   return (
