@@ -118,7 +118,7 @@ const EXPLORERS: Record<number, string> = {
 };
 
 async function fetchChainBridgeActivity(
-  client: typeof sepoliaClient,
+  client: ReturnType<typeof createPublicClient>,
   sourceChain: ChainMeta,
   fromBlock: bigint,
   address: `0x${string}`,
