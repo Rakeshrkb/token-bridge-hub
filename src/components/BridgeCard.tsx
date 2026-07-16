@@ -1009,17 +1009,19 @@ export function BridgeCard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {activity.map((transfer) => (
+                {activity.map((transfer: BridgeActivity) => (
                   <TableRow key={`${transfer.transactionHash}-${transfer.messageId}`}>
-                    <TableCell className="font-medium">Sepolia</TableCell>
+                    <TableCell className="font-medium">{transfer.source.name}</TableCell>
                     <TableCell>{transfer.destination?.name ?? "Unknown chain"}</TableCell>
                     <TableCell className="font-mono text-xs">
                       {transfer.receiver.slice(0, 8)}…{transfer.receiver.slice(-6)}
                     </TableCell>
-                    <TableCell>{formatEther(transfer.amount)} ETH</TableCell>
+                    <TableCell>
+                      {formatUnits(transfer.amount, transfer.tokenDecimals)} {transfer.tokenSymbol}
+                    </TableCell>
                     <TableCell>
                       <a
-                        href={`https://sepolia.etherscan.io/tx/${transfer.transactionHash}`}
+                        href={transfer.explorerTxUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-primary hover:underline"
