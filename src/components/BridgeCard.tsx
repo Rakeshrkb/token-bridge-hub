@@ -37,6 +37,7 @@ import {
   getTokenAddress,
   isBridgeSupported,
   SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+  BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
   type BridgeTokenMeta,
   CROSS_TOKEN_ABI,
 } from "@/lib/bridge";
