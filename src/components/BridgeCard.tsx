@@ -130,13 +130,13 @@ async function fetchChainBridgeActivity(
     fromBlock,
   });
 
-  const matching = logs.filter(
+  const matching = (logs as any[]).filter(
     (log) => log.args.receiver?.toLowerCase() === address.toLowerCase(),
   );
 
   // Decode token from tx input (Sent event does not include token address)
   const results = await Promise.all(
-    matching.map(async (log) => {
+    matching.map(async (log: any) => {
       let tokenAddress: `0x${string}` = ZERO_ADDRESS;
       try {
         const tx = await client.getTransaction({ hash: log.transactionHash });
