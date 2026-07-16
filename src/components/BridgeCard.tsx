@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap, Droplet } from "lucide-react";
-import { createPublicClient, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
+import { createPublicClient, decodeFunctionData, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
 import {
   useAccount,
   useBalance,
