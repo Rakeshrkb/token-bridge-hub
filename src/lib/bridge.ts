@@ -152,9 +152,10 @@ export type BridgeChainConfig = {
   tokens: Record<string, `0x${string}`>;
 };
 
-// The Sepolia bridge was deployed in this block. Activity queries start here so
-// we do not scan unrelated historical chain data.
-export const SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK = 11251875n;
+// Bridge deployment blocks. Activity queries start here so we do not scan
+// unrelated historical chain data.
+export const SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK = 11272807n;
+export const BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK = 44161057n;
 
 export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
   [sepolia.id]: {

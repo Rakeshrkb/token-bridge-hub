@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap, Droplet } from "lucide-react";
-import { createPublicClient, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
+import { createPublicClient, decodeFunctionData, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
 import {
   useAccount,
   useBalance,
@@ -37,6 +37,7 @@ import {
   getTokenAddress,
   isBridgeSupported,
   SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+  BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
   type BridgeTokenMeta,
   CROSS_TOKEN_ABI,
 } from "@/lib/bridge";
@@ -52,8 +53,12 @@ import {
 const sepoliaClient = createPublicClient({
   chain: sepolia,
   // The chain's default public RPC does not reliably serve historical logs.
-  // This endpoint returns the small bridge-event history from the deployment block.
   transport: http("https://sepolia.gateway.tenderly.co"),
+});
+
+const baseSepoliaClient = createPublicClient({
+  chain: baseSepolia,
+  transport: http("https://base-sepolia.gateway.tenderly.co"),
 });
 
 async function fetchEthPrice(): Promise<number> {
@@ -83,21 +88,66 @@ type BridgeActivity = {
   messageId: `0x${string}`;
   receiver: `0x${string}`;
   amount: bigint;
+  source: ChainMeta;
   destination: ChainMeta | undefined;
   blockNumber: bigint;
   transactionHash: `0x${string}`;
+  tokenSymbol: string;
+  tokenDecimals: number;
+  explorerTxUrl: string;
 };
 
-async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
-  const logs = await sepoliaClient.getLogs({
-    address: BRIDGE_CHAINS[sepolia.id].contract,
+function resolveTokenMeta(chainId: number, tokenAddress: `0x${string}`) {
+  if (tokenAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
+    return { symbol: NATIVE_TOKEN.symbol, decimals: NATIVE_TOKEN.decimals };
+  }
+  const chainTokens = BRIDGE_CHAINS[chainId]?.tokens ?? {};
+  const key = Object.keys(chainTokens).find(
+    (k) => chainTokens[k].toLowerCase() === tokenAddress.toLowerCase(),
+  );
+  if (key) {
+    const meta = BRIDGE_TOKENS.find((t) => t.key === key);
+    if (meta) return { symbol: meta.symbol, decimals: meta.decimals };
+  }
+  return { symbol: "TOKEN", decimals: 18 };
+}
+
+const EXPLORERS: Record<number, string> = {
+  [sepolia.id]: "https://sepolia.etherscan.io/tx/",
+  [baseSepolia.id]: "https://sepolia.basescan.org/tx/",
+};
+
+async function fetchChainBridgeActivity(
+  client: any,
+  sourceChain: ChainMeta,
+  fromBlock: bigint,
+  address: `0x${string}`,
+): Promise<BridgeActivity[]> {
+  const contract = BRIDGE_CHAINS[sourceChain.id].contract;
+  const logs = await client.getLogs({
+    address: contract,
     event: BRIDGE_ABI[1],
-    fromBlock: SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
+    fromBlock,
   });
 
-  return logs
-    .filter((log) => log.args.receiver?.toLowerCase() === address.toLowerCase())
-    .map((log) => {
+  const matching = (logs as any[]).filter(
+    (log) => log.args.receiver?.toLowerCase() === address.toLowerCase(),
+  );
+
+  // Decode token from tx input (Sent event does not include token address)
+  const results = await Promise.all(
+    matching.map(async (log: any) => {
+      let tokenAddress: `0x${string}` = ZERO_ADDRESS;
+      try {
+        const tx = await client.getTransaction({ hash: log.transactionHash });
+        const decoded = decodeFunctionData({ abi: BRIDGE_ABI, data: tx.input });
+        if (decoded.functionName === "bridge") {
+          tokenAddress = decoded.args[2] as `0x${string}`;
+        }
+      } catch {
+        // fall back to native
+      }
+      const { symbol, decimals } = resolveTokenMeta(sourceChain.id, tokenAddress);
       const destinationConfig = getBridgeChainBySelector(log.args.destinationChainSelector!);
       const destination = CHAINS.find((chain) => chain.id === destinationConfig?.chainId);
 
@@ -105,13 +155,33 @@ async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<Bridg
         messageId: log.args.messageId!,
         receiver: log.args.receiver!,
         amount: log.args.amount!,
+        source: sourceChain,
         destination,
         blockNumber: log.blockNumber,
         transactionHash: log.transactionHash,
-      };
-    })
-    .sort((a, b) => Number(b.blockNumber - a.blockNumber));
+        tokenSymbol: symbol,
+        tokenDecimals: decimals,
+        explorerTxUrl: `${EXPLORERS[sourceChain.id]}${log.transactionHash}`,
+      } satisfies BridgeActivity;
+    }),
+  );
+
+  return results;
 }
+
+async function fetchBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
+  const sepoliaMeta = CHAINS.find((c) => c.id === sepolia.id)!;
+  const baseMeta = CHAINS.find((c) => c.id === baseSepolia.id)!;
+  const [sep, base] = await Promise.all([
+    fetchChainBridgeActivity(sepoliaClient, sepoliaMeta, SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address).catch(() => []),
+    fetchChainBridgeActivity(baseSepoliaClient, baseMeta, BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address).catch(() => []),
+  ]);
+  return [...sep, ...base].sort((a, b) => {
+    if (a.source.id !== b.source.id) return Number(b.blockNumber - a.blockNumber);
+    return Number(b.blockNumber - a.blockNumber);
+  });
+}
+
 
 function ChainBadge({ chain, size = 32 }: { chain: ChainMeta; size?: number }) {
   return (
@@ -227,7 +297,7 @@ export function BridgeCard() {
     error: activityError,
   } = useQuery({
     queryKey: ["sepolia-bridge-activity", address],
-    queryFn: () => fetchSepoliaBridgeActivity(address!),
+    queryFn: () => fetchBridgeActivity(address!),
     enabled: activityOpen && !!address,
     staleTime: 30_000,
   });
@@ -917,7 +987,7 @@ export function BridgeCard() {
             </div>
           ) : activityLoading ? (
             <div className="rounded-xl bg-secondary/40 p-5 text-sm text-muted-foreground">
-              Loading transfers from Sepolia…
+              Loading transfers from Sepolia and Base Sepolia…
             </div>
           ) : activityError ? (
             <div className="rounded-xl bg-destructive/10 p-5 text-sm text-destructive">
@@ -925,7 +995,7 @@ export function BridgeCard() {
             </div>
           ) : activity.length === 0 ? (
             <div className="rounded-xl bg-secondary/40 p-5 text-sm text-muted-foreground">
-              No Sepolia bridge transfers found for this wallet.
+              No bridge transfers found for this wallet.
             </div>
           ) : (
             <Table>
@@ -939,17 +1009,19 @@ export function BridgeCard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {activity.map((transfer) => (
+                {activity.map((transfer: BridgeActivity) => (
                   <TableRow key={`${transfer.transactionHash}-${transfer.messageId}`}>
-                    <TableCell className="font-medium">Sepolia</TableCell>
+                    <TableCell className="font-medium">{transfer.source.name}</TableCell>
                     <TableCell>{transfer.destination?.name ?? "Unknown chain"}</TableCell>
                     <TableCell className="font-mono text-xs">
                       {transfer.receiver.slice(0, 8)}…{transfer.receiver.slice(-6)}
                     </TableCell>
-                    <TableCell>{formatEther(transfer.amount)} ETH</TableCell>
+                    <TableCell>
+                      {formatUnits(transfer.amount, transfer.tokenDecimals)} {transfer.tokenSymbol}
+                    </TableCell>
                     <TableCell>
                       <a
-                        href={`https://sepolia.etherscan.io/tx/${transfer.transactionHash}`}
+                        href={transfer.explorerTxUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-primary hover:underline"
