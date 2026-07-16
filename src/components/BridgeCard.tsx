@@ -987,7 +987,7 @@ export function BridgeCard() {
             </div>
           ) : activityLoading ? (
             <div className="rounded-xl bg-secondary/40 p-5 text-sm text-muted-foreground">
-              Loading transfers from Sepolia…
+              Loading transfers from Sepolia and Base Sepolia…
             </div>
           ) : activityError ? (
             <div className="rounded-xl bg-destructive/10 p-5 text-sm text-destructive">
@@ -995,7 +995,7 @@ export function BridgeCard() {
             </div>
           ) : activity.length === 0 ? (
             <div className="rounded-xl bg-secondary/40 p-5 text-sm text-muted-foreground">
-              No Sepolia bridge transfers found for this wallet.
+              No bridge transfers found for this wallet.
             </div>
           ) : (
             <Table>
