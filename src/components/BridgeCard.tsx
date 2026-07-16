@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap, Droplet } from "lucide-react";
+import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap, Droplet, Plus } from "lucide-react";
 import { createPublicClient, decodeFunctionData, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
 import {
+  useWalletClient,
   useAccount,
   useBalance,
   useReadContract,
@@ -193,6 +194,62 @@ async function fetchChainBridgeActivity(
   );
 
   return results;
+}
+
+function AddTokenButton({ token, chainId }: { token: BridgeTokenMeta; chainId: number }) {
+  const { data: walletClient } = useWalletClient({ chainId });
+  const { chainId: connectedChainId } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+
+  if (token.isNative) return null; // native ETH/POL doesn't need "adding"
+
+  const tokenAddress = getTokenAddress(chainId, token.key);
+  if (!tokenAddress) return null;
+  const wrongChain = connectedChainId !== chainId;
+
+  const handleAddToken = async () => {
+    if (wrongChain) {
+      try {
+        await switchChainAsync({ chainId });
+      } catch {
+        toast.error(`Switch to ${CHAINS.find((c) => c.id === chainId)?.name} to add ${token.symbol}`);
+        return;
+      }
+    }
+    if (!walletClient) return;
+    try {
+      const added = await walletClient.watchAsset({
+        type: "ERC20",
+        options: {
+          address: tokenAddress,
+          symbol: token.symbol,
+          decimals: token.decimals,
+          image: token.logo,
+        },
+      });
+      if (added) {
+        toast.success(`${token.symbol} added to wallet`);
+      }
+    } catch (e) {
+      toast.error("Could not add token", {
+        description: e instanceof Error ? e.message.split("\n")[0] : "Try again",
+      });
+    }
+  };
+
+  return (
+    <button
+      onClick={handleAddToken}
+      title={
+        wrongChain
+          ? `Switch to ${CHAINS.find((c) => c.id === chainId)?.name} and add ${token.symbol}`
+          : `Add ${token.symbol} to wallet`
+      }
+      className="flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+    >
+      <Plus className="h-4 w-4" />
+    </button>
+  );
 }
 
 async function fetchBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
@@ -729,21 +786,24 @@ export function BridgeCard() {
               }}
               className="min-w-0 flex-1 bg-transparent text-4xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/40"
             />
-            <button
-              onClick={() => setTokenPickerOpen(true)}
-              className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2 transition-colors hover:bg-background"
-            >
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1">
-                <img
-                  src={token.logo}
-                  alt={token.symbol}
-                  onError={(e) => (e.currentTarget.style.display = "none")}
-                  className="h-full w-full object-contain"
-                />
-              </div>
-              <span className="text-sm font-semibold text-foreground">{token.symbol}</span>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setTokenPickerOpen(true)}
+                className="flex items-center gap-2 rounded-full bg-background/80 px-3 py-2 transition-colors hover:bg-background"
+              >
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-neutral-900 p-1">
+                  <img
+                    src={token.logo}
+                    alt={token.symbol}
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <span className="text-sm font-semibold text-foreground">{token.symbol}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+              {!token.isNative && <AddTokenButton token={token} chainId={from.id} />}
+            </div>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>
@@ -759,20 +819,24 @@ export function BridgeCard() {
               )}
             </span>
             <div className="flex items-center gap-2">
-              {!token.isNative && rateLimitEnabled && availableCapacity !== undefined && (
-                <span className={cn(exceedsRateLimit && "text-destructive")}>
-                  Per Tx: {formatUnits(availableCapacity, token.decimals)} {token.symbol}
-                </span>
-              )}
-              {isConnected && walletBalanceFormatted !== undefined && (
-                <button
-                  onClick={() => setAmount(walletBalanceFormatted)}
-                  className="rounded-md px-1.5 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10"
-                >
-                  Balance: {Number(walletBalanceFormatted).toFixed(4)} {token.symbol} · Max
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {!token.isNative && rateLimitEnabled && availableCapacity !== undefined && (
+                  <span className={cn(exceedsRateLimit && "text-destructive")}>
+                    Per Tx: {formatUnits(availableCapacity, token.decimals)} {token.symbol}
+                  </span>
+                )}
+                {isConnected && walletBalanceFormatted !== undefined && (
+                  <button
+                    onClick={() => setAmount(walletBalanceFormatted)}
+                    className="rounded-md px-1.5 py-0.5 font-medium text-primary transition-colors hover:bg-primary/10"
+                  >
+                    Balance: {Number(walletBalanceFormatted).toFixed(4)} {token.symbol} · Max
+                  </button>
+                )}
+              </div>
             </div>
+
+
           </div>
 
         </div>
