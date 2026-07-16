@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "sdk_version": "0.22.2",
+  "path": "/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "bridgr-mcp",
+      "version": "0.1.0",
+      "title": "Bridgr MCP"
+    },
+    "tools": [
+      {
+        "name": "list_supported_chains",
+        "title": "List supported chains",
+        "description": "List the testnet chains Bridgr can bridge between, including chain id, CCIP selector, and the deployed bridge contract address on each chain.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_bridge_tokens",
+        "title": "List bridgeable tokens",
+        "description": "List the tokens Bridgr can move across chains (native ETH plus supported ERC20s), with per-chain token addresses where applicable.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_destination_pool_balance",
+        "title": "Get destination pool balance",
+        "description": "Read the current liquidity available in the Bridgr destination pool for a given chain and token. Use this to check if a bridge of a given size can be fulfilled on the destination chain.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "chainId": {
+              "type": "number",
+              "description": "Destination chain id (e.g. 11155111 for Sepolia, 84532 for Base Sepolia)."
+            },
+            "tokenKey": {
+              "type": "string",
+              "description": "Token key from list_bridge_tokens (e.g. 'ETH' or 'CROSS')."
+            }
+          },
+          "required": [
+            "chainId",
+            "tokenKey"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
