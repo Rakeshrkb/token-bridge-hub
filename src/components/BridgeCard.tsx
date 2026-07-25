@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap, Droplet, Plus } from "lucide-react";
-import { createPublicClient, decodeFunctionData, formatEther, formatUnits, http, parseEther, parseUnits } from "viem";
+import { formatUnits, http, parseEther, parseUnits } from "viem";
 import {
   useWalletClient,
   useAccount,
@@ -10,7 +10,7 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
-import { sepolia, baseSepolia, polygonAmoy } from "wagmi/chains";
+import { sepolia, baseSepolia, polygonAmoy, bscTestnet } from "wagmi/chains";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -37,9 +37,6 @@ import {
   getMessageIdFromReceipt,
   getTokenAddress,
   isBridgeSupported,
-  SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
-  BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK,
-  AMOY_BRIDGE_DEPLOYMENT_BLOCK,
   type BridgeTokenMeta,
   CROSS_TOKEN_ABI,
 } from "@/lib/bridge";
@@ -52,21 +49,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const sepoliaClient = createPublicClient({
-  chain: sepolia,
-  // The chain's default public RPC does not reliably serve historical logs.
-  transport: http("https://sepolia.gateway.tenderly.co"),
-});
-
-const baseSepoliaClient = createPublicClient({
-  chain: baseSepolia,
-  transport: http("https://base-sepolia.gateway.tenderly.co"),
-});
-
-const amoyClient = createPublicClient({
-  chain: polygonAmoy,
-  transport: http("https://polygon-amoy.gateway.tenderly.co"), // or your Infura endpoint
-});
+const SUBGRAPH_URL = "https://api.studio.thegraph.com/query/1756605/bridge-x/v2";
 
 async function fetchEthPrice(): Promise<number> {
   const res = await fetch(
@@ -90,6 +73,7 @@ const CHAINS: ChainMeta[] = [
   { id: sepolia.id, name: "Sepolia", short: "SEP", color: "#627EEA", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png" },
   { id: baseSepolia.id, name: "Base Sepolia", short: "BASE", color: "#0052FF", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png" },
   { id: polygonAmoy.id, name: "Polygon Amoy", short: "AMOY", color: "#8247E5", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png" },
+  { id: bscTestnet.id, name: "BSC Testnet", short: "BSC", color: "#F3BA78", testnet: true, logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png" },
 ];
 
 type BridgeActivity = {
@@ -124,6 +108,7 @@ const EXPLORERS: Record<number, string> = {
   [sepolia.id]: "https://sepolia.etherscan.io/tx/",
   [baseSepolia.id]: "https://sepolia.basescan.org/tx/",
   [polygonAmoy.id]: "https://amoy.polygonscan.com/tx/",
+  [bscTestnet.id]: "https://testnet.bscscan.com/tx/",
 };
 
 const TRANSFER_TOPIC0 =
@@ -252,22 +237,57 @@ function AddTokenButton({ token, chainId }: { token: BridgeTokenMeta; chainId: n
   );
 }
 
-async function fetchBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
-  const sepoliaMeta = CHAINS.find((c) => c.id === sepolia.id)!;
-  const baseMeta = CHAINS.find((c) => c.id === baseSepolia.id)!;
-  const amoyMeta = CHAINS.find((c) => c.id === polygonAmoy.id)!;
+async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
+  const query = `
+    {
+      sents(
+        first: 20,
+        orderBy: blockNumber,
+        orderDirection: desc,
+        where: { receiver: "${address.toLowerCase()}" }
+      ) {
+        id
+        messageId
+        destinationChainSelector
+        receiver
+        token
+        amount
+        blockNumber
+        transactionHash
+      }
+    }
+  `;
 
-  const [sep, base, amoy] = await Promise.all([
-    fetchChainBridgeActivity(sepoliaClient, sepoliaMeta, SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address)
-      .catch((e) => { console.error("sepolia activity fetch failed:", e); return []; }),
-    fetchChainBridgeActivity(baseSepoliaClient, baseMeta, BASE_SEPOLIA_BRIDGE_DEPLOYMENT_BLOCK, address)
-      .catch((e) => { console.error("base sepolia activity fetch failed:", e); return []; }),
-    fetchChainBridgeActivity(amoyClient, amoyMeta, AMOY_BRIDGE_DEPLOYMENT_BLOCK, address)
-      .catch((e) => { console.error("amoy activity fetch failed:", e); return []; }),
-  ]);
-  return [...sep, ...base, ...amoy].sort((a, b) => {
-    if (a.source.id !== b.source.id) return Number(b.blockNumber - a.blockNumber);
-    return Number(b.blockNumber - a.blockNumber);
+  const res = await fetch(SUBGRAPH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!res.ok) throw new Error("Failed to fetch bridge activity from subgraph");
+
+  const { data, errors } = await res.json();
+  if (errors) throw new Error(errors[0]?.message ?? "Subgraph query failed");
+
+  const sepoliaMeta = CHAINS.find((c) => c.id === sepolia.id)!;
+
+  return data.sents.map((s: any) => {
+    const destinationConfig = getBridgeChainBySelector(BigInt(s.destinationChainSelector));
+    const destination = CHAINS.find((chain) => chain.id === destinationConfig?.chainId);
+    const { symbol, decimals } = resolveTokenMeta(sepolia.id, s.token as `0x${string}`);
+
+    return {
+      messageId: s.messageId as `0x${string}`,
+      receiver: s.receiver as `0x${string}`,
+      amount: BigInt(s.amount),
+      source: sepoliaMeta,
+      destination,
+      blockNumber: BigInt(s.blockNumber),
+      transactionHash: s.transactionHash as `0x${string}`,
+      tokenSymbol: symbol,
+      tokenDecimals: decimals,
+      explorerTxUrl: `${EXPLORERS[sepolia.id]}${s.transactionHash}`,
+    } satisfies BridgeActivity;
   });
 }
 
@@ -386,7 +406,7 @@ export function BridgeCard() {
     error: activityError,
   } = useQuery({
     queryKey: ["sepolia-bridge-activity", address],
-    queryFn: () => fetchBridgeActivity(address!),
+    queryFn: () => fetchSepoliaBridgeActivity(address!),
     enabled: activityOpen && !!address,
     staleTime: 30_000,
   });

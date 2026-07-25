@@ -1,7 +1,7 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
 import { createPublicClient, http, formatUnits } from "viem";
-import { sepolia, baseSepolia, polygonAmoy } from "wagmi/chains";
+import { sepolia, baseSepolia, polygonAmoy, bscTestnet } from "wagmi/chains";
 import {
   BRIDGE_CHAINS,
   BRIDGE_TOKENS,
@@ -15,6 +15,8 @@ function clientFor(chainId: number) {
     return createPublicClient({ chain: baseSepolia, transport: http() });
   if (chainId === polygonAmoy.id)
     return createPublicClient({ chain: polygonAmoy, transport: http() });
+  if (chainId === bscTestnet.id)
+    return createPublicClient({ chain: bscTestnet, transport: http() });
   return null;
 }
 
