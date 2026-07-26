@@ -306,11 +306,14 @@ function DocsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground">Liquidity model</h2>
             <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
-              Because BridgeX uses pre-funded pools rather than mint/burn, the destination chain's pool
-              must hold enough ETH to cover your bridge amount. BridgeX checks destination pool
-              liquidity before allowing a bridge transaction, and will block the transaction upfront if
-              the pool can't cover it — rather than letting it fail after your funds are already locked
-              on the source side.
+              Native ETH bridging relies on pre-funded pools, so the destination chain's pool must
+              hold enough ETH to cover your amount. BridgeX checks destination pool liquidity before
+              allowing the transaction and blocks it upfront if the pool can't cover it — rather than
+              letting it fail after your funds are already locked on the source side.
+            </p>
+            <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
+              CROSS has no such constraint: it is burned on the source chain and minted on the
+              destination chain, so no pre-funded liquidity is required.
             </p>
           </section>
 
@@ -321,14 +324,14 @@ function DocsPage() {
             </p>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground md:text-base">
               <li>
-                <strong className="text-foreground">Testnet only</strong> — Sepolia and Base Sepolia
-                ETH have no real value.
+                <strong className="text-foreground">Testnet only</strong> — Sepolia, Base Sepolia,
+                Polygon Amoy and BSC Testnet assets have no real value.
               </li>
               <li>
-                <strong className="text-foreground">Pool-based liquidity</strong> — unlike mint/burn
-                bridges, available liquidity depends on manual pool funding and can be temporarily
-                exhausted.
+                <strong className="text-foreground">Pool-based ETH liquidity</strong> — native ETH
+                liquidity depends on manual pool funding and can be temporarily exhausted.
               </li>
+
               <li>
                 <strong className="text-foreground">No protocol fee</strong> — CCIP messaging fees
                 (paid in LINK) are currently absorbed by the platform, not charged to the sender.
