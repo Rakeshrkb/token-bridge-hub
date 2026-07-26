@@ -290,6 +290,10 @@ function DocsPage() {
               from the token address, and links to the CCIP Explorer via the{" "}
               <code className="font-mono text-foreground">messageId</code>.
             </p>
+            <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
+              The Activity tab is intentionally recent-only: the subgraph query fetches the latest 10
+              transfers and the table displays the last 8.
+            </p>
           </section>
 
 
