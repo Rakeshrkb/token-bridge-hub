@@ -241,7 +241,7 @@ async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<Bridg
   const query = `
     {
       sents(
-        first: 20,
+        first: 10,
         orderBy: blockNumber,
         orderDirection: desc,
         where: { receiver: "${address.toLowerCase()}" }

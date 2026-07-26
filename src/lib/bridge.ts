@@ -203,6 +203,9 @@ export const TOKEN_POOLS: Record<number, Record<string, `0x${string}`>> = {
   [baseSepolia.id]: {
     CROSS: "0x2Cf54C4a8f5B442Fdfc455Be329B4B74580cb336",
   },
+  [polygonAmoy.id]: {
+    CROSS: "0x2587b881C9F815035df67883A51a538BDe558c68", // TODO: update when deployed
+  },
   [bscTestnet.id]: {
     CROSS: "0x2587b881C9F815035df67883A51a538BDe558c68",
   },
