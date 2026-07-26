@@ -9,13 +9,13 @@ export const Route = createFileRoute("/docs")({
       {
         name: "description",
         content:
-          "Learn how BridgeX uses Chainlink CCIP to bridge native ETH between Ethereum Sepolia and Base Sepolia testnets.",
+          "How BridgeX uses Chainlink CCIP to bridge native ETH and the CROSS token across Sepolia, Base Sepolia, Polygon Amoy and BSC Testnet.",
       },
       { property: "og:title", content: "BridgeX Documentation" },
       {
         property: "og:description",
         content:
-          "Learn how BridgeX uses Chainlink CCIP to bridge native ETH between Ethereum Sepolia and Base Sepolia testnets.",
+          "How BridgeX uses Chainlink CCIP to bridge native ETH and the CROSS token across Sepolia, Base Sepolia, Polygon Amoy and BSC Testnet.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
