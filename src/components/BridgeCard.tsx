@@ -1118,7 +1118,7 @@ export function BridgeCard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {activity.map((transfer: BridgeActivity) => (
+                {activity.slice(0, 8).map((transfer: BridgeActivity) => (
                   <TableRow key={`${transfer.transactionHash}-${transfer.messageId}`}>
                     <TableCell className="font-medium">{transfer.source.name}</TableCell>
                     <TableCell>{transfer.destination?.name ?? "Unknown chain"}</TableCell>

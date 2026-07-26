@@ -272,7 +272,7 @@ function DocsPage() {
             <div className="mt-4 overflow-x-auto rounded-xl border border-border/60 bg-secondary/30 p-5 font-mono text-xs text-muted-foreground md:text-sm">
               <pre className="whitespace-pre">
 {`{
-  sents(first: 20, orderBy: blockNumber, orderDirection: desc,
+  sents(first: 10, orderBy: blockNumber, orderDirection: desc,
         where: { receiver: "0x…" }) {
     messageId
     destinationChainSelector
@@ -289,6 +289,10 @@ function DocsPage() {
               Each row resolves the destination chain from the CCIP selector and the token symbol
               from the token address, and links to the CCIP Explorer via the{" "}
               <code className="font-mono text-foreground">messageId</code>.
+            </p>
+            <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
+              The Activity tab is intentionally recent-only: the subgraph query fetches the latest 10
+              transfers and the table displays the last 8.
             </p>
           </section>
 
