@@ -272,7 +272,7 @@ function DocsPage() {
             <div className="mt-4 overflow-x-auto rounded-xl border border-border/60 bg-secondary/30 p-5 font-mono text-xs text-muted-foreground md:text-sm">
               <pre className="whitespace-pre">
 {`{
-  sents(first: 20, orderBy: blockNumber, orderDirection: desc,
+  sents(first: 10, orderBy: blockNumber, orderDirection: desc,
         where: { receiver: "0x…" }) {
     messageId
     destinationChainSelector
