@@ -9,13 +9,13 @@ export const Route = createFileRoute("/docs")({
       {
         name: "description",
         content:
-          "Learn how BridgeX uses Chainlink CCIP to bridge native ETH between Ethereum Sepolia and Base Sepolia testnets.",
+          "How BridgeX uses Chainlink CCIP to bridge native ETH and the CROSS token across Sepolia, Base Sepolia, Polygon Amoy and BSC Testnet.",
       },
       { property: "og:title", content: "BridgeX Documentation" },
       {
         property: "og:description",
         content:
-          "Learn how BridgeX uses Chainlink CCIP to bridge native ETH between Ethereum Sepolia and Base Sepolia testnets.",
+          "How BridgeX uses Chainlink CCIP to bridge native ETH and the CROSS token across Sepolia, Base Sepolia, Polygon Amoy and BSC Testnet.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -53,11 +53,11 @@ function DocsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground">What is BridgeX</h2>
             <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
-              BridgeX is a native ETH bridge between Ethereum Sepolia and Base Sepolia testnets, built
-              directly on Chainlink's Cross-Chain Interoperability Protocol (CCIP). Unlike
-              token-wrapping bridges, BridgeX moves native ETH using a lock-and-release architecture
-              with custom Solidity smart contracts — no third-party bridge aggregator or router
-              service in the middle.
+              BridgeX is a cross-chain bridge built directly on Chainlink's Cross-Chain
+              Interoperability Protocol (CCIP). It supports native ETH as well as the CROSS ERC20
+              token across four testnets: Ethereum Sepolia, Base Sepolia, Polygon Amoy and BNB Smart
+              Chain Testnet — using custom Solidity contracts, with no third-party bridge aggregator
+              in the middle.
             </p>
             <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
               This is a testnet project built to explore production-grade cross-chain wallet
@@ -66,26 +66,44 @@ function DocsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-foreground">How it works</h2>
+            <h2 className="text-xl font-semibold text-foreground">Bridging models</h2>
             <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
-              BridgeX uses a lock-and-release model rather than mint-and-burn:
+              BridgeX uses two different mechanisms depending on the asset:
             </p>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground md:text-base">
+              <li>
+                <strong className="text-foreground">Native ETH — lock &amp; release.</strong> ETH is
+                locked in the BridgeX pool on the source chain and an equivalent amount is released
+                from the pre-funded pool on the destination chain.
+              </li>
+              <li>
+                <strong className="text-foreground">CROSS (ERC20) — burn &amp; mint.</strong> CROSS
+                is burned by the token pool on the source chain and freshly minted to the receiver on
+                the destination chain, so total supply stays constant across all chains and there is
+                no pool liquidity requirement.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-foreground">How it works</h2>
             <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground md:text-base">
               <li>
-                You send ETH to the BridgeX contract on the source chain (e.g. Sepolia). The contract
-                locks that ETH in its own pool.
+                You call <code className="font-mono text-foreground">bridge(destinationChainSelector, receiver, token, amount)</code>{" "}
+                on the BridgeX contract. For ETH the token address is the zero address and the value
+                is sent as <code className="font-mono text-foreground">msg.value</code>; for CROSS you
+                first approve the bridge contract, then the amount is pulled and burned.
               </li>
               <li>
                 The contract sends a CCIP message to the destination chain's BridgeX contract via
-                Chainlink's Router, containing the recipient address and amount.
+                Chainlink's Router, containing the recipient address, token and amount.
               </li>
               <li>
-                Chainlink's decentralized oracle network (DON) verifies and delivers the message to the
-                destination contract.
+                Chainlink's decentralized oracle network (DON) verifies and delivers the message to
+                the destination contract.
               </li>
               <li>
-                The destination contract releases the equivalent ETH from its own pre-funded pool
-                directly to the recipient.
+                The destination contract releases ETH from its pool, or mints CROSS to the recipient.
               </li>
             </ol>
 
@@ -93,36 +111,35 @@ function DocsPage() {
               <pre className="whitespace-pre">
 {`Source Chain                     Destination Chain
 ┌─────────────────┐              ┌─────────────────┐
-│  BridgeX pool    │  CCIP msg    │  BridgeX pool    │
-│  locks ETH   ────┼─────────────>│  releases ETH    │
+│ lock ETH / burn  │  CCIP msg    │ release ETH /    │
+│ CROSS        ────┼─────────────>│ mint CROSS       │
 └─────────────────┘              └─────────────────┘`}
               </pre>
             </div>
 
             <p className="mt-4 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
-              Both contracts maintain independent, pre-funded ETH pools. Each contract only trusts
-              messages from a verified counterpart contract address on the paired chain
-              (allow-listed via trustedRemote), preventing spoofed cross-chain messages from
-              draining funds.
+              Each contract only trusts messages from a verified counterpart contract address on the
+              paired chain (allow-listed via trustedRemote), preventing spoofed cross-chain messages
+              from draining funds.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-semibold text-foreground">Supported networks</h2>
-            <div className="mt-4 overflow-hidden rounded-xl border border-border/60">
+            <div className="mt-4 overflow-x-auto rounded-xl border border-border/60">
               <table className="w-full text-left text-sm">
                 <thead className="bg-secondary/60 text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-medium">Chain</th>
-                    <th className="px-4 py-3 font-medium">Role</th>
+                    <th className="px-4 py-3 font-medium">Chain ID</th>
                     <th className="px-4 py-3 font-medium">Chain Selector</th>
-                    <th className="px-4 py-3 font-medium">Contract</th>
+                    <th className="px-4 py-3 font-medium">Bridge Contract</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   <tr>
                     <td className="px-4 py-3 font-medium text-foreground">Ethereum Sepolia</td>
-                    <td className="px-4 py-3 text-muted-foreground">Source / Destination</td>
+                    <td className="px-4 py-3 text-muted-foreground">11155111</td>
                     <td className="px-4 py-3 font-mono text-muted-foreground">16015286601757825753</td>
                     <td className="px-4 py-3 font-mono text-primary">
                       <a
@@ -131,14 +148,14 @@ function DocsPage() {
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 hover:underline"
                       >
-                        0x41337272…AdD3
+                        0x4133727299A02942Ca9a3e18fD11D95DCa3dAdD3
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </td>
                   </tr>
                   <tr>
                     <td className="px-4 py-3 font-medium text-foreground">Base Sepolia</td>
-                    <td className="px-4 py-3 text-muted-foreground">Source / Destination</td>
+                    <td className="px-4 py-3 text-muted-foreground">84532</td>
                     <td className="px-4 py-3 font-mono text-muted-foreground">10344971235874465080</td>
                     <td className="px-4 py-3 font-mono text-primary">
                       <a
@@ -147,7 +164,39 @@ function DocsPage() {
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 hover:underline"
                       >
-                        0x3e4Fe7d2…eEaA
+                        0x3e4Fe7d25dE550bEacFC185a7fef83270717eEaA
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium text-foreground">Polygon Amoy</td>
+                    <td className="px-4 py-3 text-muted-foreground">80002</td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">16281711391670634445</td>
+                    <td className="px-4 py-3 font-mono text-primary">
+                      <a
+                        href="https://amoy.polygonscan.com/address/0xE3Be36F99d9a1F253cBF669a72a12948902aF66C"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 hover:underline"
+                      >
+                        0xE3Be36F99d9a1F253cBF669a72a12948902aF66C
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium text-foreground">BNB Smart Chain Testnet</td>
+                    <td className="px-4 py-3 text-muted-foreground">97</td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">16281711391670634445</td>
+                    <td className="px-4 py-3 font-mono text-primary">
+                      <a
+                        href="https://testnet.bscscan.com/address/0xE3Be36F99d9a1F253cBF669a72a12948902aF66C"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 hover:underline"
+                      >
+                        0xE3Be36F99d9a1F253cBF669a72a12948902aF66C
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </td>
@@ -155,11 +204,94 @@ function DocsPage() {
                 </tbody>
               </table>
             </div>
+
+            <h3 className="mt-8 text-base font-semibold text-foreground">
+              CROSS token &amp; pool addresses
+            </h3>
+            <div className="mt-3 overflow-x-auto rounded-xl border border-border/60">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-secondary/60 text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Chain</th>
+                    <th className="px-4 py-3 font-medium">CROSS Token</th>
+                    <th className="px-4 py-3 font-medium">Burn &amp; Mint Pool</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  <tr>
+                    <td className="px-4 py-3 font-medium text-foreground">Ethereum Sepolia</td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">
+                      0x334aE912E59ec7cAe23A12d631cFb6F4889dB80F
+                    </td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">
+                      0x25e9022beBac9001D1Cba2744cfdA068a78F75e9
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium text-foreground">Base Sepolia</td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">
+                      0x47b341EB45FC6E69Eee17bD6D85d82CC56ad6624
+                    </td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">
+                      0x2Cf54C4a8f5B442Fdfc455Be329B4B74580cb336
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium text-foreground">Polygon Amoy</td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">
+                      0x89bb27051790D2f51Ba6b7153447c9C7d3bBB6DF
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">—</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-medium text-foreground">BNB Smart Chain Testnet</td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">
+                      0x2587b881C9F815035df67883A51a538BDe558c68
+                    </td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">
+                      0x2587b881C9F815035df67883A51a538BDe558c68
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <p className="mt-3 text-sm text-muted-foreground">
-              Both contracts are verified on-chain — source code is publicly viewable at the links
+              Bridge contracts are verified on-chain — source code is publicly viewable at the links
               above.
             </p>
           </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-foreground">Transaction history</h2>
+            <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
+              The Activity tab does not scan raw chain logs. BridgeX indexes the{" "}
+              <code className="font-mono text-foreground">Sent</code> event emitted by the bridge
+              contracts with a subgraph on The Graph, and the frontend queries it over GraphQL,
+              filtered by your connected wallet address:
+            </p>
+            <div className="mt-4 overflow-x-auto rounded-xl border border-border/60 bg-secondary/30 p-5 font-mono text-xs text-muted-foreground md:text-sm">
+              <pre className="whitespace-pre">
+{`{
+  sents(first: 20, orderBy: blockNumber, orderDirection: desc,
+        where: { receiver: "0x…" }) {
+    messageId
+    destinationChainSelector
+    receiver
+    token
+    amount
+    blockNumber
+    transactionHash
+  }
+}`}
+              </pre>
+            </div>
+            <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
+              Each row resolves the destination chain from the CCIP selector and the token symbol
+              from the token address, and links to the CCIP Explorer via the{" "}
+              <code className="font-mono text-foreground">messageId</code>.
+            </p>
+          </section>
+
 
           <section>
             <h2 className="text-xl font-semibold text-foreground">Timing expectations</h2>
@@ -174,11 +306,14 @@ function DocsPage() {
           <section>
             <h2 className="text-xl font-semibold text-foreground">Liquidity model</h2>
             <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
-              Because BridgeX uses pre-funded pools rather than mint/burn, the destination chain's pool
-              must hold enough ETH to cover your bridge amount. BridgeX checks destination pool
-              liquidity before allowing a bridge transaction, and will block the transaction upfront if
-              the pool can't cover it — rather than letting it fail after your funds are already locked
-              on the source side.
+              Native ETH bridging relies on pre-funded pools, so the destination chain's pool must
+              hold enough ETH to cover your amount. BridgeX checks destination pool liquidity before
+              allowing the transaction and blocks it upfront if the pool can't cover it — rather than
+              letting it fail after your funds are already locked on the source side.
+            </p>
+            <p className="mt-3 text-balance text-sm leading-relaxed text-muted-foreground md:text-base">
+              CROSS has no such constraint: it is burned on the source chain and minted on the
+              destination chain, so no pre-funded liquidity is required.
             </p>
           </section>
 
@@ -189,14 +324,14 @@ function DocsPage() {
             </p>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground md:text-base">
               <li>
-                <strong className="text-foreground">Testnet only</strong> — Sepolia and Base Sepolia
-                ETH have no real value.
+                <strong className="text-foreground">Testnet only</strong> — Sepolia, Base Sepolia,
+                Polygon Amoy and BSC Testnet assets have no real value.
               </li>
               <li>
-                <strong className="text-foreground">Pool-based liquidity</strong> — unlike mint/burn
-                bridges, available liquidity depends on manual pool funding and can be temporarily
-                exhausted.
+                <strong className="text-foreground">Pool-based ETH liquidity</strong> — native ETH
+                liquidity depends on manual pool funding and can be temporarily exhausted.
               </li>
+
               <li>
                 <strong className="text-foreground">No protocol fee</strong> — CCIP messaging fees
                 (paid in LINK) are currently absorbed by the platform, not charged to the sender.
