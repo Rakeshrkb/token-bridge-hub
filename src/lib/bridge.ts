@@ -260,3 +260,14 @@ export const isBridgeSupported = (chainId: number) => chainId in BRIDGE_CHAINS;
 export function getBridgeChainBySelector(selector: bigint): BridgeChainConfig | undefined {
   return Object.values(BRIDGE_CHAINS).find((chain) => chain.selector === selector);
 }
+
+// Chainlink LINK token addresses (used to pay CCIP fees from the bridge contract)
+export const LINK_TOKENS: Record<number, `0x${string}`> = {
+  [sepolia.id]: "0x779877A7B0D9E8603169DdbD7836e478b4624789",
+  [baseSepolia.id]: "0xE4aB69C077896252FAFBD49EFD26B5D171A32410",
+  [polygonAmoy.id]: "0x0Fd9e8d3aF1aaee056EB9e802c3A762a667b1904",
+  [bscTestnet.id]: "0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06",
+};
+
+// Below this LINK balance the bridge contract should be topped up.
+export const LINK_LOW_BALANCE_THRESHOLD = 1;

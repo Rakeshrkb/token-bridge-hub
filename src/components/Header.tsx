@@ -30,6 +30,9 @@ export function Header() {
           <Link to="/docs" className={navLinkClass(pathname === "/docs")}>
             Docs
           </Link>
+          <Link to="/admin" className={navLinkClass(pathname === "/admin")}>
+            Admin
+          </Link>
         </nav>
       </div>
 
