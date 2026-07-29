@@ -86,7 +86,7 @@ async function fetchLinkBalances(): Promise<LinkRow[]> {
         balance: 0,
       };
       try {
-        const client = createPublicClient({ chain, transport: http() });
+        const client = createPublicClient({ chain, transport: transportFor(chain.id) });
         const raw = (await client.readContract({
           address: link,
           abi: ERC20_ABI,
