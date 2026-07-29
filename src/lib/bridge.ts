@@ -178,16 +178,16 @@ export const BRIDGE_CHAINS: Record<number, BridgeChainConfig> = {
   },
   [polygonAmoy.id]: {
     chainId: polygonAmoy.id,
-    contract: "0xE3Be36F99d9a1F253cBF669a72a12948902aF66C", // TODO: update when deployed
-    selector: 16281711391670634445n, // TODO: update when deployed
+    contract: "0xE3Be36F99d9a1F253cBF669a72a12948902aF66C",
+    selector: 16281711391670634445n, // Polygon Amoy CCIP selector
     tokens: {
-      CROSS: "0x89bb27051790D2f51Ba6b7153447c9C7d3bBB6DF", // TODO: update when deployed
+      CROSS: "0x89bb27051790D2f51Ba6b7153447c9C7d3bBB6DF",
     },
   },
   [bscTestnet.id]: {
     chainId: bscTestnet.id,
     contract: "0xE3Be36F99d9a1F253cBF669a72a12948902aF66C", // TODO: update when deployed
-    selector: 16281711391670634445n, // TODO: update when deployed
+    selector: 13264668187771770619n, // BSC Testnet CCIP selector
     tokens: {
       CROSS: "0x2587b881C9F815035df67883A51a538BDe558c68",
     },
