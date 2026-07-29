@@ -188,8 +188,7 @@ function AdminPage() {
         </div>
 
         <p className="mt-4 text-xs text-muted-foreground">
-          Balances refresh automatically every 60 seconds. LINK token addresses:{" "}
-          {CHAINS.map((c) => `${c.name} ${LINK_TOKENS[c.chain.id].slice(0, 6)}…`).join(" · ")}
+          Balances refresh automatically every 60 seconds
         </p>
       </main>
     </div>
