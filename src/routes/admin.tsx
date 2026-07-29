@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { createPublicClient, http, formatUnits } from "viem";
+import { createPublicClient, http, fallback, formatUnits } from "viem";
 import { sepolia, baseSepolia, polygonAmoy, bscTestnet } from "wagmi/chains";
 import { AlertTriangle, CheckCircle2, ExternalLink, RefreshCw } from "lucide-react";
 
