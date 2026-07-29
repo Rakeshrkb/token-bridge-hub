@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { createPublicClient, http, formatUnits } from "viem";
+import { createPublicClient, http, fallback, formatUnits } from "viem";
 import { sepolia, baseSepolia, polygonAmoy, bscTestnet } from "wagmi/chains";
 import { AlertTriangle, CheckCircle2, ExternalLink, RefreshCw } from "lucide-react";
 
@@ -40,6 +40,28 @@ const CHAINS = [
   { chain: bscTestnet, name: "BSC Testnet", explorer: "https://testnet.bscscan.com/address/" },
 ];
 
+// Some default public RPCs (notably Polygon Amoy) are unreliable, which surfaced
+// as a false "RPC error" instead of a real balance. Use fallbacks per chain.
+const RPC_URLS: Record<number, string[]> = {
+  [polygonAmoy.id]: [
+    "https://polygon-amoy-bor-rpc.publicnode.com",
+    "https://polygon-amoy.drpc.org",
+    "https://rpc-amoy.polygon.technology",
+  ],
+  [bscTestnet.id]: [
+    "https://bsc-testnet-rpc.publicnode.com",
+    "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
+  ],
+  [sepolia.id]: ["https://ethereum-sepolia-rpc.publicnode.com"],
+  [baseSepolia.id]: ["https://base-sepolia-rpc.publicnode.com"],
+};
+
+function transportFor(chainId: number) {
+  const urls = RPC_URLS[chainId];
+  if (!urls?.length) return http();
+  return fallback([...urls.map((u) => http(u)), http()]);
+}
+
 type LinkRow = {
   chainId: number;
   name: string;
@@ -64,7 +86,7 @@ async function fetchLinkBalances(): Promise<LinkRow[]> {
         balance: 0,
       };
       try {
-        const client = createPublicClient({ chain, transport: http() });
+        const client = createPublicClient({ chain, transport: transportFor(chain.id) });
         const raw = (await client.readContract({
           address: link,
           abi: ERC20_ABI,
