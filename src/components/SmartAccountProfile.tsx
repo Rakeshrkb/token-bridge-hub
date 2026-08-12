@@ -28,6 +28,19 @@ import {
 } from "@/lib/smartAccount";
 import { ERC20_ABI, getTokenAddress, BRIDGE_TOKENS } from "@/lib/bridge";
 
+const ERC20_TRANSFER_ABI = [
+  {
+    type: "function",
+    name: "transfer",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
 export function SmartAccountProfile() {
   const { address, chainId } = useAccount();
   const [open, setOpen] = useState(false);
@@ -114,9 +127,9 @@ export function SmartAccountProfile() {
           return;
         }
         const data = encodeFunctionData({
-          abi: ERC20_ABI,
-          functionName: "transfer" as never,
-          args: [to as `0x${string}`, parseUnits(amount, tokenMeta.decimals)] as never,
+          abi: ERC20_TRANSFER_ABI,
+          functionName: "transfer",
+          args: [to as `0x${string}`, parseUnits(amount, tokenMeta.decimals)],
         });
         writeContract(
           {
