@@ -1,6 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { ThemeToggle } from "./ThemeToggle";
+import { SmartAccountProfile } from "./SmartAccountProfile";
+
 
 export function Header() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
