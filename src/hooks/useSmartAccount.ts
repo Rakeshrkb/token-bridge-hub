@@ -7,12 +7,14 @@ import {
 } from "@/lib/smartAccount";
 import { useMemo } from "react";
 import { useWalletClient } from "wagmi";
-import { createPublicClient, http, type Address } from "viem";
-import { createBundlerClient, createPaymasterClient } from "viem/account-abstraction";
+import { http, type Address } from "viem";
+import { entryPoint07Address } from "viem/account-abstraction";
+import { createBundlerClient } from "viem/account-abstraction";
+import { createPimlicoClient } from "permissionless/clients/pimlico";
 import { sepolia, baseSepolia, polygonAmoy, bscTestnet } from "wagmi/chains";
 import { toBridgeXSmartAccount } from "@/lib/smartAccount";
 
-const CHAIN_BY_ID = { [sepolia.id]: sepolia, [baseSepolia.id]: baseSepolia, [polygonAmoy.id]: polygonAmoy, [bscTestnet.id]: bscTestnet } as const;
+// const CHAIN_BY_ID = { [sepolia.id]: sepolia, [baseSepolia.id]: baseSepolia, [polygonAmoy.id]: polygonAmoy, [bscTestnet.id]: bscTestnet } as const;
 const FACTORY_ADDRESS: Record<number, Address> = {
   [sepolia.id]: "0x47a1999566c71d1E2201D2Fac1771A89b233880e",
   [baseSepolia.id]: "0x47a1999566c71d1E2201D2Fac1771A89b233880e",
@@ -73,17 +75,29 @@ export function useSmartAccount(targetChainId?: number) {
   });
 
   const paymasterClient = useMemo(
-    () => (chainId ? createPaymasterClient({ transport: http(bundlerUrl(chainId)) }) : undefined),
+    () =>
+      chainId
+        ? createPimlicoClient({
+          transport: http(bundlerUrl(chainId)),
+          entryPoint: { address: entryPoint07Address, version: "0.7" },
+        })
+        : undefined,
     [chainId],
   );
 
-  const bundlerClient = useMemo(() => {
-    if (!account || !publicClient || !chainId) return undefined;
+const bundlerClient = useMemo(() => {
+    if (!account || !publicClient || !chainId || !paymasterClient) return undefined;
     return createBundlerClient({
       account,
       client: publicClient,
-      paymaster: paymasterClient, // sponsored gas -> "Bridge fee: paid By BridgeX"
+      paymaster: paymasterClient,
       transport: http(bundlerUrl(chainId)),
+      userOperation: {
+        estimateFeesPerGas: async () => {
+          const { fast } = await paymasterClient.getUserOperationGasPrice();
+          return fast;
+        },
+      },
     });
   }, [account, publicClient, paymasterClient, chainId]);
 
