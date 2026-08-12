@@ -19,13 +19,8 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  SMART_ACCOUNT_ABI,
-  SMART_ACCOUNT_FACTORY,
-  SMART_ACCOUNT_FACTORY_ABI,
-  DEFAULT_SALT,
-  shortAddress,
-} from "@/lib/smartAccount";
+import { SMART_ACCOUNT_ABI, shortAddress } from "@/lib/smartAccount";
+import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { ERC20_ABI, getTokenAddress, BRIDGE_TOKENS } from "@/lib/bridge";
 
 const ERC20_TRANSFER_ABI = [
@@ -50,16 +45,7 @@ export function SmartAccountProfile() {
   const [amount, setAmount] = useState("");
   const [tokenKey, setTokenKey] = useState("ETH");
 
-  const { data: smartAddress } = useReadContract({
-    address: SMART_ACCOUNT_FACTORY,
-    abi: SMART_ACCOUNT_FACTORY_ABI,
-    functionName: "getAddress",
-    args: address ? [address, DEFAULT_SALT] : undefined,
-    chainId,
-    query: { enabled: Boolean(address) },
-  });
-
-  const sa = smartAddress as `0x${string}` | undefined;
+  const { smartAccountAddress: sa, isDeployed } = useSmartAccount();
   const tokenMeta = BRIDGE_TOKENS.find((t) => t.key === tokenKey) ?? BRIDGE_TOKENS[0];
   const tokenAddress = chainId ? getTokenAddress(chainId, tokenKey) : undefined;
 
@@ -173,6 +159,15 @@ export function SmartAccountProfile() {
           <p className="text-xs text-muted-foreground">Address</p>
           <div className="mt-1 flex items-center justify-between gap-2">
             <span className="break-all font-mono text-sm">{sa ?? "Loading…"}</span>
+            <span
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                isDeployed
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border bg-muted text-muted-foreground"
+              }`}
+            >
+              {isDeployed ? "Deployed" : "Not deployed"}
+            </span>
             <button
               onClick={copy}
               className="shrink-0 rounded-md border border-border p-2 transition hover:bg-accent"
