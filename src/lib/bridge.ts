@@ -249,6 +249,7 @@ export const BRIDGE_TOKENS: BridgeTokenMeta[] = [
 ];
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+export const ETH_ADDRESS = "0x0000000000000000000000000000000000000001" as `0x${string}`;
 
 export function getTokenAddress(chainId: number, tokenKey: string): `0x${string}` | undefined {
   if (tokenKey === "ETH") return ZERO_ADDRESS;

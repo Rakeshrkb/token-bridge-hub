@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { ThemeToggle } from "./ThemeToggle";
 import { SmartAccountProfile } from "./SmartAccountProfile";
+import { NewBadge } from "./NewBadge";
 
 
 export function Header() {
@@ -32,9 +33,10 @@ export function Header() {
           <Link to="/docs" className={navLinkClass(pathname === "/docs")}>
             Docs
           </Link>
-          <Link to="/smart-accounts" className={navLinkClass(pathname === "/smart-accounts")}>
+          <a href="/smart-accounts" className="inline-flex items-center text-sm font-medium text-foreground/80 hover:text-foreground">
             Smart Accounts
-          </Link>
+            <NewBadge />
+          </a>
           <Link to="/admin" className={navLinkClass(pathname === "/admin")}>
             Admin
           </Link>

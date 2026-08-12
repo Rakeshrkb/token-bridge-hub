@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Copy, Check, Send, QrCode, Wallet } from "lucide-react";
 import { encodeFunctionData, parseEther, parseUnits, formatUnits, isAddress } from "viem";
-import {
-  useAccount,
-  useBalance,
-  useReadContract,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, useBalance, useReadContract } from "wagmi";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +13,7 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { SMART_ACCOUNT_ABI, shortAddress } from "@/lib/smartAccount";
+import { shortAddress } from "@/lib/smartAccount";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { ERC20_ABI, getTokenAddress, BRIDGE_TOKENS } from "@/lib/bridge";
 
@@ -45,7 +39,7 @@ export function SmartAccountProfile() {
   const [amount, setAmount] = useState("");
   const [tokenKey, setTokenKey] = useState("ETH");
 
-  const { smartAccountAddress: sa, isDeployed } = useSmartAccount();
+  const { smartAccountAddress: sa, isDeployed, bundlerClient } = useSmartAccount(chainId);
   const tokenMeta = BRIDGE_TOKENS.find((t) => t.key === tokenKey) ?? BRIDGE_TOKENS[0];
   const tokenAddress = chainId ? getTokenAddress(chainId, tokenKey) : undefined;
 
@@ -72,8 +66,8 @@ export function SmartAccountProfile() {
       ? `${Number(formatUnits(erc20Balance as bigint, tokenMeta.decimals)).toFixed(5)} ${tokenMeta.symbol}`
       : "—";
 
-  const { writeContract, data: txHash, isPending } = useWriteContract();
-  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: txHash });
+  const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const copy = async () => {
     if (!sa) return;
@@ -82,8 +76,8 @@ export function SmartAccountProfile() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const handleSend = () => {
-    if (!sa) return;
+const handleSend = async () => {
+    if (!sa || !bundlerClient) return;
     if (!isAddress(to)) {
       toast.error("Enter a valid recipient address");
       return;
@@ -94,44 +88,38 @@ export function SmartAccountProfile() {
     }
 
     try {
-      if (tokenMeta.isNative) {
-        writeContract(
-          {
-            address: sa,
-            abi: SMART_ACCOUNT_ABI,
-            functionName: "execute",
-            args: [to as `0x${string}`, parseEther(amount), "0x"],
-          },
-          {
-            onSuccess: () => toast.success("Transfer submitted from smart account"),
-            onError: (e) => toast.error(e.message.split("\n")[0]),
-          },
-        );
-      } else {
-        if (!tokenAddress) {
-          toast.error("Token not supported on this chain");
-          return;
-        }
-        const data = encodeFunctionData({
-          abi: ERC20_TRANSFER_ABI,
-          functionName: "transfer",
-          args: [to as `0x${string}`, parseUnits(amount, tokenMeta.decimals)],
-        });
-        writeContract(
-          {
-            address: sa,
-            abi: SMART_ACCOUNT_ABI,
-            functionName: "execute",
-            args: [tokenAddress, 0n, data],
-          },
-          {
-            onSuccess: () => toast.success("Transfer submitted from smart account"),
-            onError: (e) => toast.error(e.message.split("\n")[0]),
-          },
-        );
-      }
+      const call = tokenMeta.isNative
+        ? { to: to as `0x${string}`, value: parseEther(amount), data: "0x" as `0x${string}` }
+        : (() => {
+            if (!tokenAddress) throw new Error("Token not supported on this chain");
+            return {
+              to: tokenAddress,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: ERC20_TRANSFER_ABI,
+                functionName: "transfer",
+                args: [to as `0x${string}`, parseUnits(amount, tokenMeta.decimals)],
+              }),
+            };
+          })();
+
+      setSending(true);
+      const hash = await bundlerClient.sendUserOperation({ calls: [call] });
+      toast.success("Transfer submitted from smart account", {
+        description: `${hash.slice(0, 10)}…${hash.slice(-6)}`,
+      });
+
+      setSending(false);
+      setConfirming(true);
+      await bundlerClient.waitForUserOperationReceipt({ hash });
+      toast.success("Transfer confirmed");
+      setTo("");
+      setAmount("");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to send");
+      toast.error(e instanceof Error ? e.message.split("\n")[0] : "Failed to send");
+    } finally {
+      setSending(false);
+      setConfirming(false);
     }
   };
 
@@ -151,7 +139,7 @@ export function SmartAccountProfile() {
         <DialogHeader>
           <DialogTitle>Smart account</DialogTitle>
           <DialogDescription>
-            Deterministic account owned by your connected wallet (salt 0).
+            Smart account owned by your connected wallet.
           </DialogDescription>
         </DialogHeader>
 
@@ -231,9 +219,9 @@ export function SmartAccountProfile() {
             <Button
               className="w-full"
               onClick={handleSend}
-              disabled={isPending || isConfirming || !sa}
+              disabled={sending || confirming || !sa || !bundlerClient}
             >
-              {isPending || isConfirming ? "Sending…" : `Send ${tokenMeta.symbol}`}
+              {sending ? "Confirm in wallet…" : confirming ? "Sending…" : `Send ${tokenMeta.symbol}`}
             </Button>
           </div>
         )}

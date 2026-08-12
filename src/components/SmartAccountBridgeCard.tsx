@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap, Droplet, Plus } from "lucide-react";
-import { formatUnits, http, parseEther, parseUnits } from "viem";
+import { ArrowDownUp, ChevronDown, ExternalLink, Link2, History, Zap, Droplet, Wallet } from "lucide-react";
+import { encodeFunctionData, formatUnits, http, parseEther, parseUnits } from "viem";
 import {
   useWalletClient,
   useAccount,
@@ -11,6 +11,7 @@ import {
   useWriteContract,
 } from "wagmi";
 import { sepolia, baseSepolia, polygonAmoy, bscTestnet } from "wagmi/chains";
+import { useSmartAccount } from "@/hooks/useSmartAccount";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ import {
   ERC20_ABI,
   NATIVE_TOKEN,
   ZERO_ADDRESS,
+  ETH_ADDRESS,
   getBridgeChainBySelector,
   getTokenPoolAddress,
   getMessageIdFromReceipt,
@@ -93,6 +95,9 @@ function resolveTokenMeta(chainId: number, tokenAddress: `0x${string}`) {
   if (tokenAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
     return { symbol: NATIVE_TOKEN.symbol, decimals: NATIVE_TOKEN.decimals };
   }
+  if (tokenAddress.toLowerCase() === ETH_ADDRESS.toLowerCase()) {
+    return { symbol: NATIVE_TOKEN.symbol, decimals: NATIVE_TOKEN.decimals };
+  }
   const chainTokens = BRIDGE_CHAINS[chainId]?.tokens ?? {};
   const key = Object.keys(chainTokens).find(
     (k) => chainTokens[k].toLowerCase() === tokenAddress.toLowerCase(),
@@ -101,7 +106,7 @@ function resolveTokenMeta(chainId: number, tokenAddress: `0x${string}`) {
     const meta = BRIDGE_TOKENS.find((t) => t.key === key);
     if (meta) return { symbol: meta.symbol, decimals: meta.decimals };
   }
-  return { symbol: "TOKEN", decimals: 18 };
+  return { symbol: "UNKNOWN", decimals: 18 };
 }
 
 const EXPLORERS: Record<number, string> = {
@@ -131,111 +136,111 @@ async function inferTokenFromReceipt(
   return ZERO_ADDRESS; // no Transfer into the bridge => it was native ETH
 }
 
-async function fetchChainBridgeActivity(
-  client: any,
-  sourceChain: ChainMeta,
-  fromBlock: bigint,
-  address: `0x${string}`,
-): Promise<BridgeActivity[]> {
-  const contract = BRIDGE_CHAINS[sourceChain.id].contract;
-  const logs = await client.getLogs({
-    address: contract,
-    event: BRIDGE_ABI[1],
-    args: { receiver: address }, // RPC-side filter
-    fromBlock,
-  });
+// async function fetchChainBridgeActivity(
+//   client: any,
+//   sourceChain: ChainMeta,
+//   fromBlock: bigint,
+//   address: `0x${string}`,
+// ): Promise<BridgeActivity[]> {
+//   const contract = BRIDGE_CHAINS[sourceChain.id].contract;
+//   const logs = await client.getLogs({
+//     address: contract,
+//     event: BRIDGE_ABI[1],
+//     args: { receiver: address }, // RPC-side filter
+//     fromBlock,
+//   });
 
-  const matching = (logs as any[]).filter(
-    (log) => log.args.receiver?.toLowerCase() === address.toLowerCase(),
-  );
+//   const matching = (logs as any[]).filter(
+//     (log) => log.args.receiver?.toLowerCase() === address.toLowerCase(),
+//   );
 
-  // Decode token from tx input (Sent event does not include token address)
-  const results = await Promise.all(
-    matching.map(async (log: any) => {
-      let tokenAddress: `0x${string}`;
-      try {
-        tokenAddress = await inferTokenFromReceipt(client, log.transactionHash, contract);
-      } catch (e) {
-        console.warn(`Could not determine token for tx ${log.transactionHash}:`, e);
-        tokenAddress = ZERO_ADDRESS; // fallback only after a real attempt, not a decode guess
-      }
-      const { symbol, decimals } = resolveTokenMeta(sourceChain.id, tokenAddress);
-      const destinationConfig = getBridgeChainBySelector(log.args.destinationChainSelector!);
-      const destination = CHAINS.find((chain) => chain.id === destinationConfig?.chainId);
+//   // Decode token from tx input (Sent event does not include token address)
+//   const results = await Promise.all(
+//     matching.map(async (log: any) => {
+//       let tokenAddress: `0x${string}`;
+//       try {
+//         tokenAddress = await inferTokenFromReceipt(client, log.transactionHash, contract);
+//       } catch (e) {
+//         console.warn(`Could not determine token for tx ${log.transactionHash}:`, e);
+//         tokenAddress = ZERO_ADDRESS; // fallback only after a real attempt, not a decode guess
+//       }
+//       const { symbol, decimals } = resolveTokenMeta(sourceChain.id, tokenAddress);
+//       const destinationConfig = getBridgeChainBySelector(log.args.destinationChainSelector!);
+//       const destination = CHAINS.find((chain) => chain.id === destinationConfig?.chainId);
 
-      return {
-        messageId: log.args.messageId!,
-        receiver: log.args.receiver!,
-        amount: log.args.amount!,
-        source: sourceChain,
-        destination,
-        blockNumber: log.blockNumber,
-        transactionHash: log.transactionHash,
-        tokenSymbol: symbol,
-        tokenDecimals: decimals,
-        explorerTxUrl: `${EXPLORERS[sourceChain.id]}${log.transactionHash}`,
-      } satisfies BridgeActivity;
-    }),
-  );
+//       return {
+//         messageId: log.args.messageId!,
+//         receiver: log.args.receiver!,
+//         amount: log.args.amount!,
+//         source: sourceChain,
+//         destination,
+//         blockNumber: log.blockNumber,
+//         transactionHash: log.transactionHash,
+//         tokenSymbol: symbol,
+//         tokenDecimals: decimals,
+//         explorerTxUrl: `${EXPLORERS[sourceChain.id]}${log.transactionHash}`,
+//       } satisfies BridgeActivity;
+//     }),
+//   );
 
-  return results;
-}
+//   return results;
+// }
 
-function AddTokenButton({ token, chainId }: { token: BridgeTokenMeta; chainId: number }) {
-  const { data: walletClient } = useWalletClient({ chainId });
-  const { chainId: connectedChainId } = useAccount();
-  const { switchChainAsync } = useSwitchChain();
+// function AddTokenButton({ token, chainId }: { token: BridgeTokenMeta; chainId: number }) {
+//   const { data: walletClient } = useWalletClient({ chainId });
+//   const { chainId: connectedChainId } = useAccount();
+//   const { switchChainAsync } = useSwitchChain();
 
-  if (token.isNative) return null; // native ETH/POL doesn't need "adding"
+//   if (token.isNative) return null; // native ETH/POL doesn't need "adding"
 
-  const tokenAddress = getTokenAddress(chainId, token.key);
-  if (!tokenAddress) return null;
-  const wrongChain = connectedChainId !== chainId;
+//   const tokenAddress = getTokenAddress(chainId, token.key);
+//   if (!tokenAddress) return null;
+//   const wrongChain = connectedChainId !== chainId;
 
-  const handleAddToken = async () => {
-    if (wrongChain) {
-      try {
-        await switchChainAsync({ chainId });
-      } catch {
-        toast.error(`Switch to ${CHAINS.find((c) => c.id === chainId)?.name} to add ${token.symbol}`);
-        return;
-      }
-    }
-    if (!walletClient) return;
-    try {
-      const added = await walletClient.watchAsset({
-        type: "ERC20",
-        options: {
-          address: tokenAddress,
-          symbol: token.symbol,
-          decimals: token.decimals,
-          image: token.logo,
-        },
-      });
-      if (added) {
-        toast.success(`${token.symbol} added to wallet`);
-      }
-    } catch (e) {
-      toast.error("Could not add token", {
-        description: e instanceof Error ? e.message.split("\n")[0] : "Try again",
-      });
-    }
-  };
+//   const handleAddToken = async () => {
+//     if (wrongChain) {
+//       try {
+//         await switchChainAsync({ chainId });
+//       } catch {
+//         toast.error(`Switch to ${CHAINS.find((c) => c.id === chainId)?.name} to add ${token.symbol}`);
+//         return;
+//       }
+//     }
+//     if (!walletClient) return;
+//     try {
+//       const added = await walletClient.watchAsset({
+//         type: "ERC20",
+//         options: {
+//           address: tokenAddress,
+//           symbol: token.symbol,
+//           decimals: token.decimals,
+//           image: token.logo,
+//         },
+//       });
+//       if (added) {
+//         toast.success(`${token.symbol} added to wallet`);
+//       }
+//     } catch (e) {
+//       toast.error("Could not add token", {
+//         description: e instanceof Error ? e.message.split("\n")[0] : "Try again",
+//       });
+//     }
+//   };
 
-  return (
-    <button
-      onClick={handleAddToken}
-      title={
-        wrongChain
-          ? `Switch to ${CHAINS.find((c) => c.id === chainId)?.name} and add ${token.symbol}`
-          : `Add ${token.symbol} to wallet`
-      }
-      className="flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-    >
-      <Plus className="h-4 w-4" />
-    </button>
-  );
-}
+//   return (
+//     <button
+//       onClick={handleAddToken}
+//       title={
+//         wrongChain
+//           ? `Switch to ${CHAINS.find((c) => c.id === chainId)?.name} and add ${token.symbol}`
+//           : `Add ${token.symbol} to wallet`
+//       }
+//       className="flex h-9 w-9 items-center justify-center rounded-full bg-background/80 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+//     >
+//       <Plus className="h-4 w-4" />
+//     </button>
+//   );
+// }
 
 async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<BridgeActivity[]> {
   const query = `
@@ -379,6 +384,7 @@ export function SmartAccountBridgeCard() {
   const [messageId, setMessageId] = useState<`0x${string}` | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
   const [approving, setApproving] = useState(false);
+  const { smartAccountAddress: sa, isDeployed, bundlerClient } = useSmartAccount(from.id);
 
   const { data: ethPrice = 1800, isLoading: priceLoading } = useQuery({
     queryKey: ["eth-price"],
@@ -390,23 +396,12 @@ export function SmartAccountBridgeCard() {
   const { address, isConnected, chainId } = useAccount();
 
   const {
-    writeContractAsync: faucetWriteAsync,
-    data: faucetTxHash,
-    reset: resetFaucetWrite,
-  } = useWriteContract();
-
-  const { isLoading: faucetConfirming, isSuccess: faucetConfirmed } =
-    useWaitForTransactionReceipt({
-      hash: faucetTxHash,
-      chainId: from.id,
-    });
-  const {
     data: activity = [],
     isFetching: activityLoading,
     error: activityError,
   } = useQuery({
-    queryKey: ["sepolia-bridge-activity", address],
-    queryFn: () => fetchSepoliaBridgeActivity(address!),
+    queryKey: ["sepolia-bridge-activity", sa],
+    queryFn: () => fetchSepoliaBridgeActivity(sa!),
     enabled: activityOpen && !!address,
     staleTime: 30_000,
   });
@@ -417,12 +412,12 @@ export function SmartAccountBridgeCard() {
   const srcTokenAddress = getTokenAddress(from.id, token.key);
   const destTokenAddress = getTokenAddress(to.id, token.key);
   const [faucetSubmitting, setFaucetSubmitting] = useState(false);
-  const faucetBusy = faucetSubmitting || faucetConfirming;
+  const faucetBusy = faucetSubmitting;
   const FAUCET_AMOUNT = 100; // 100 cross tokens
 
   // Native balance for wallet on source chain (used for ETH bridging + gas hint)
   const { data: nativeBalance, refetch: refetchNativeBalance } = useBalance({
-    address,
+    address: sa,
     chainId: from.id,
     query: { enabled: !!address },
   });
@@ -432,7 +427,7 @@ export function SmartAccountBridgeCard() {
     address: srcTokenAddress && srcTokenAddress !== ZERO_ADDRESS ? srcTokenAddress : undefined,
     abi: ERC20_ABI,
     functionName: "balanceOf",
-    args: address ? [address] : undefined,
+    args: sa ? [sa] : undefined,
     chainId: from.id,
     query: {
       enabled: !token.isNative && !!address && !!srcTokenAddress && srcTokenAddress !== ZERO_ADDRESS,
@@ -441,13 +436,13 @@ export function SmartAccountBridgeCard() {
 
   const crossTokenAddress = getTokenAddress(from.id, "CROSS");
 
-  const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
+const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
     address: crossTokenAddress,
     abi: CROSS_TOKEN_ABI,
     functionName: "lastMint",
-    args: address ? [address] : undefined,
+    args: sa ? [sa] : undefined,
     chainId: from.id,
-    query: { enabled: !!address && !!crossTokenAddress },
+    query: { enabled: !!sa && !!crossTokenAddress },
   });
 
   const faucetOnCooldown =
@@ -459,7 +454,7 @@ export function SmartAccountBridgeCard() {
     address: srcTokenAddress && srcTokenAddress !== ZERO_ADDRESS ? srcTokenAddress : undefined,
     abi: ERC20_ABI,
     functionName: "allowance",
-    args: address && srcContract ? [address, srcContract] : undefined,
+    args: sa && srcContract ? [sa, srcContract] : undefined,
     chainId: from.id,
     query: {
       enabled:
@@ -512,51 +507,70 @@ export function SmartAccountBridgeCard() {
     ? formatUnits(destPoolRaw, token.decimals)
     : undefined;
 
-  const {
-    writeContract,
-    writeContractAsync,
-    data: txHash,
-    isPending: sending,
-    reset: resetWrite,
-  } = useWriteContract();
-  const {
-    data: receipt,
-    isLoading: confirming,
-    isSuccess: confirmed,
-  } = useWaitForTransactionReceipt({
-    hash: txHash,
-    chainId: from.id,
-  });
+  const [userOpHash, setUserOpHash] = useState<`0x${string}` | null>(null);
+  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
-    if (receipt) {
-      const id = getMessageIdFromReceipt(receipt);
-      if (id) setMessageId(id);
-    }
-  }, [receipt]);
+    if (!userOpHash || !bundlerClient) return;
+    let cancelled = false;
+    setConfirming(true);
 
-  useEffect(() => {
-    if (confirmed && txHash) {
-      toast.success("Bridge transaction confirmed", {
-        description: "Funds will arrive on the destination chain shortly.",
+    bundlerClient
+      .waitForUserOperationReceipt({ hash: userOpHash })
+      .then((result) => {
+        if (cancelled) return;
+        const receipt = result.receipt;
+        setTxHash(receipt.transactionHash);
+
+        const id = getMessageIdFromReceipt(receipt);
+        if (id) setMessageId(id);
+
+        toast.success("Bridge transaction confirmed", {
+          description: "Funds will arrive on the destination chain shortly.",
+        });
+        setConfirmedDialogOpen(true);
+        refetchNativeBalance();
+        refetchErc20Balance();
+        refetchAllowance();
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        toast.error("Bridge failed on-chain", {
+          description: e instanceof Error ? e.message.split("\n")[0] : "Try again",
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setConfirming(false);
       });
-      setConfirmedDialogOpen(true);
-      refetchNativeBalance();
-      refetchErc20Balance();
-      refetchAllowance();
-    }
-  }, [confirmed, txHash, refetchNativeBalance, refetchErc20Balance, refetchAllowance]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userOpHash, bundlerClient, refetchNativeBalance, refetchErc20Balance, refetchAllowance]);
 
   const closeConfirmedDialog = () => {
     setConfirmedDialogOpen(false);
     setAmount("");
     setMessageId(null);
-    resetWrite();
+    setUserOpHash(null);
+    setTxHash(null);
   };
 
-  const swap = () => {
-    setFrom(to);
-    setTo(from);
+  const swap = async () => {
+    const newFrom = to;
+    const newTo = from;
+    setFrom(newFrom);
+    setTo(newTo);
+
+    if (isConnected && chainId !== newFrom.id) {
+      try {
+        await switchChainAsync({ chainId: newFrom.id });
+      } catch {
+        
+      }
+    }
   };
 
   const numAmount = Number(amount || "0");
@@ -640,21 +654,27 @@ export function SmartAccountBridgeCard() {
   ]);
 
   const handleApprove = async () => {
-    if (!address || !srcContract || !srcTokenAddress) return;
+    if (!address || !sa || !srcContract || !srcTokenAddress || !bundlerClient) return;
     try {
       setApproving(true);
-      const hash = await writeContractAsync({
-        address: srcTokenAddress,
-        abi: ERC20_ABI,
-        functionName: "approve",
-        args: [srcContract, parsedAmount],
-        chainId: from.id,
+      const hash = await bundlerClient.sendUserOperation({
+        calls: [
+          {
+            to: srcTokenAddress,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: ERC20_ABI,
+              functionName: "approve",
+              args: [srcContract, parsedAmount],
+            }),
+          },
+        ],
       });
       toast.success("Approval submitted", {
         description: `${hash.slice(0, 10)}…${hash.slice(-6)}`,
       });
-      // Wait a beat then refetch allowance
-      setTimeout(() => refetchAllowance(), 1500);
+      await bundlerClient.waitForUserOperationReceipt({ hash });
+      refetchAllowance();
     } catch (e) {
       toast.error("Approval failed", {
         description: e instanceof Error ? e.message.split("\n")[0] : "Try again",
@@ -666,23 +686,31 @@ export function SmartAccountBridgeCard() {
 
   const handleFaucetMint = async () => {
     const crossToken = BRIDGE_TOKENS.find((t) => t.key === "CROSS");
-    if (!crossToken || !crossTokenAddress) return;
-
-    if (chainId !== from.id) {
-      await switchChainAsync({ chainId: from.id });
-    }
+    if (!crossToken || !crossTokenAddress || !sa || !bundlerClient) return;
 
     // Switch the selected token to CROSS so balance/UI reflects the mint
     if (token.key !== "CROSS") setToken(crossToken);
 
     try {
       setFaucetSubmitting(true);
-      await faucetWriteAsync({
-        address: crossTokenAddress,
-        abi: CROSS_TOKEN_ABI,
-        functionName: "mintFaucet",
-        chainId: from.id,
+      const hash = await bundlerClient.sendUserOperation({
+        calls: [
+          {
+            to: crossTokenAddress,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: CROSS_TOKEN_ABI,
+              functionName: "mintFaucet",
+            }),
+          },
+        ],
       });
+      await bundlerClient.waitForUserOperationReceipt({ hash });
+      toast.success("Faucet mint confirmed", {
+        description: `${FAUCET_AMOUNT} ${crossToken.symbol} added to your smart wallet`,
+      });
+      refetchErc20Balance();
+      refetchLastMint();
     } catch (e) {
       toast.error("Faucet mint failed", {
         description: e instanceof Error ? e.message.split("\n")[0] : "Try again",
@@ -692,20 +720,20 @@ export function SmartAccountBridgeCard() {
     }
   };
 
-  useEffect(() => {
-    if (faucetConfirmed) {
-      toast.success("Faucet mint confirmed", {
-        description: `${FAUCET_AMOUNT} ${token.symbol} added to your wallet`,
-      });
-      refetchErc20Balance();
-      refetchLastMint();
-      resetFaucetWrite();
-    }
-  }, [faucetConfirmed]);
+  // useEffect(() => {
+  //   if (faucetConfirmed) {
+  //     toast.success("Faucet mint confirmed", {
+  //       description: `${FAUCET_AMOUNT} ${token.symbol} added to your wallet`,
+  //     });
+  //     refetchErc20Balance();
+  //     refetchLastMint();
+  //     resetFaucetWrite();
+  //   }
+  // }, [faucetConfirmed]);
 
 
-  const handleBridge = () => {
-    if (!address) return;
+  const handleBridge = async () => {
+    if (!address || !sa || !bundlerClient) return;
     const src = BRIDGE_CHAINS[from.id];
     const dst = BRIDGE_CHAINS[to.id];
     if (!src || !dst) {
@@ -714,36 +742,36 @@ export function SmartAccountBridgeCard() {
     }
     try {
       const isNative = token.isNative;
-      const tokenArg: `0x${string}` = isNative
-        ? ZERO_ADDRESS
-        : (srcTokenAddress as `0x${string}`);
+      const tokenArg: `0x${string}` = isNative ? ZERO_ADDRESS : (srcTokenAddress as `0x${string}`);
       const amountArg = isNative ? 0n : parsedAmount;
       const value = isNative ? parseEther(amount as `${number}`) : 0n;
 
-      writeContract(
-        {
-          address: src.contract,
-          abi: BRIDGE_ABI,
-          functionName: "bridge",
-          args: [dst.selector, address, tokenArg, amountArg],
-          value,
-          chainId: src.chainId,
-        },
-        {
-          onSuccess: (hash) => {
-            toast.success("Transaction submitted", {
-              description: `${hash.slice(0, 10)}…${hash.slice(-6)}`,
-            });
+      // receiver is the connected EOA — funds land back in the user's wallet on `to`,
+      // not in the smart account (matches your current bridge() call signature).
+      setSending(true);
+      const hash = await bundlerClient.sendUserOperation({
+        calls: [
+          {
+            to: src.contract,
+            value,
+            data: encodeFunctionData({
+              abi: BRIDGE_ABI,
+              functionName: "bridge",
+              args: [dst.selector, sa, tokenArg, amountArg],
+            }),
           },
-          onError: (err) => {
-            toast.error("Bridge failed", { description: err.message.split("\n")[0] });
-          },
-        },
-      );
-    } catch (e) {
-      toast.error("Invalid amount", {
-        description: e instanceof Error ? e.message : "Try a smaller amount",
+        ],
       });
+      setUserOpHash(hash);
+      toast.success("Transaction submitted", {
+        description: `${hash.slice(0, 10)}…${hash.slice(-6)}`,
+      });
+    } catch (e) {
+      toast.error("Bridge failed", {
+        description: e instanceof Error ? e.message.split("\n")[0] : "Try a smaller amount",
+      });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -753,6 +781,11 @@ export function SmartAccountBridgeCard() {
   return (
     <div className="w-full max-w-[460px]">
       <div className="relative rounded-3xl border border-border/60 bg-card/80 p-1.5 shadow-2xl shadow-primary/10 backdrop-blur-xl">
+      {/* Smart wallet banner */}
+        <div className="mx-1.5 mb-1 flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
+          <Wallet className="h-3.5 w-3.5 shrink-0" />
+          <span>Using Smart Accounts, Deposit to Your address to start Bridging</span>
+        </div>
         {/* Header */}
         <div className="flex items-center justify-end gap-1 px-4 pt-3 pb-2">
           {isConnected && (
@@ -768,12 +801,10 @@ export function SmartAccountBridgeCard() {
               <Droplet className={cn("h-4 w-4", faucetBusy && "animate-pulse")} />
               <span>
                 {faucetSubmitting
-                  ? "Confirm in wallet…"
-                  : faucetConfirming
-                    ? "Minting…"
-                    : faucetOnCooldown
-                      ? "Faucet on cooldown"
-                      : "Get CROSS"}
+                  ? "Minting…"
+                  : faucetOnCooldown
+                    ? "Faucet on cooldown"
+                    : "Get CROSS"}
               </span>
             </button>
           )}
@@ -822,7 +853,7 @@ export function SmartAccountBridgeCard() {
                 <span className="text-sm font-semibold text-foreground">{token.symbol}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
-              {!token.isNative && <AddTokenButton token={token} chainId={from.id} />}
+              {/* {!token.isNative && <AddTokenButton token={token} chainId={from.id} />} */}
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
