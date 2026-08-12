@@ -32,6 +32,9 @@ export function Header() {
           <Link to="/docs" className={navLinkClass(pathname === "/docs")}>
             Docs
           </Link>
+          <Link to="/smart-accounts" className={navLinkClass(pathname === "/smart-accounts")}>
+            Smart Accounts
+          </Link>
           <Link to="/admin" className={navLinkClass(pathname === "/admin")}>
             Admin
           </Link>
@@ -41,12 +44,14 @@ export function Header() {
       {/* RIGHT SIDE */}
       <div className="flex items-center gap-2">
         <ThemeToggle />
+        {pathname === "/smart-accounts" && <SmartAccountProfile />}
         <ConnectButton
           accountStatus={{ smallScreen: "avatar", largeScreen: "full" }}
           chainStatus="icon"
           showBalance={{ smallScreen: false, largeScreen: true }}
         />
       </div>
+
     </header>
   );
 }
