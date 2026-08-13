@@ -41,6 +41,7 @@ import {
   isBridgeSupported,
   type BridgeTokenMeta,
   CROSS_TOKEN_ABI,
+  CROSS_ADDRESS,
 } from "@/lib/bridge";
 import {
   Table,
@@ -92,11 +93,15 @@ type BridgeActivity = {
 };
 
 function resolveTokenMeta(chainId: number, tokenAddress: `0x${string}`) {
+  console.log("resolveTokenMeta", { chainId, tokenAddress });
   if (tokenAddress.toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
     return { symbol: NATIVE_TOKEN.symbol, decimals: NATIVE_TOKEN.decimals };
   }
   if (tokenAddress.toLowerCase() === ETH_ADDRESS.toLowerCase()) {
     return { symbol: NATIVE_TOKEN.symbol, decimals: NATIVE_TOKEN.decimals };
+  }
+  if(tokenAddress.toLowerCase() === CROSS_ADDRESS.toLowerCase()) {
+    return { symbol: "CROSS", decimals: 18 };
   }
   const chainTokens = BRIDGE_CHAINS[chainId]?.tokens ?? {};
   const key = Object.keys(chainTokens).find(
@@ -136,55 +141,55 @@ async function inferTokenFromReceipt(
   return ZERO_ADDRESS; // no Transfer into the bridge => it was native ETH
 }
 
-// async function fetchChainBridgeActivity(
-//   client: any,
-//   sourceChain: ChainMeta,
-//   fromBlock: bigint,
-//   address: `0x${string}`,
-// ): Promise<BridgeActivity[]> {
-//   const contract = BRIDGE_CHAINS[sourceChain.id].contract;
-//   const logs = await client.getLogs({
-//     address: contract,
-//     event: BRIDGE_ABI[1],
-//     args: { receiver: address }, // RPC-side filter
-//     fromBlock,
-//   });
+async function fetchChainBridgeActivity(
+  client: any,
+  sourceChain: ChainMeta,
+  fromBlock: bigint,
+  address: `0x${string}`,
+): Promise<BridgeActivity[]> {
+  const contract = BRIDGE_CHAINS[sourceChain.id].contract;
+  const logs = await client.getLogs({
+    address: contract,
+    event: BRIDGE_ABI[1],
+    args: { receiver: address }, // RPC-side filter
+    fromBlock,
+  });
 
-//   const matching = (logs as any[]).filter(
-//     (log) => log.args.receiver?.toLowerCase() === address.toLowerCase(),
-//   );
+  const matching = (logs as any[]).filter(
+    (log) => log.args.receiver?.toLowerCase() === address.toLowerCase(),
+  );
 
-//   // Decode token from tx input (Sent event does not include token address)
-//   const results = await Promise.all(
-//     matching.map(async (log: any) => {
-//       let tokenAddress: `0x${string}`;
-//       try {
-//         tokenAddress = await inferTokenFromReceipt(client, log.transactionHash, contract);
-//       } catch (e) {
-//         console.warn(`Could not determine token for tx ${log.transactionHash}:`, e);
-//         tokenAddress = ZERO_ADDRESS; // fallback only after a real attempt, not a decode guess
-//       }
-//       const { symbol, decimals } = resolveTokenMeta(sourceChain.id, tokenAddress);
-//       const destinationConfig = getBridgeChainBySelector(log.args.destinationChainSelector!);
-//       const destination = CHAINS.find((chain) => chain.id === destinationConfig?.chainId);
+  // Decode token from tx input (Sent event does not include token address)
+  const results = await Promise.all(
+    matching.map(async (log: any) => {
+      let tokenAddress: `0x${string}`;
+      try {
+        tokenAddress = await inferTokenFromReceipt(client, log.transactionHash, contract);
+      } catch (e) {
+        console.warn(`Could not determine token for tx ${log.transactionHash}:`, e);
+        tokenAddress = ZERO_ADDRESS; // fallback only after a real attempt, not a decode guess
+      }
+      const { symbol, decimals } = resolveTokenMeta(sourceChain.id, tokenAddress);
+      const destinationConfig = getBridgeChainBySelector(log.args.destinationChainSelector!);
+      const destination = CHAINS.find((chain) => chain.id === destinationConfig?.chainId);
 
-//       return {
-//         messageId: log.args.messageId!,
-//         receiver: log.args.receiver!,
-//         amount: log.args.amount!,
-//         source: sourceChain,
-//         destination,
-//         blockNumber: log.blockNumber,
-//         transactionHash: log.transactionHash,
-//         tokenSymbol: symbol,
-//         tokenDecimals: decimals,
-//         explorerTxUrl: `${EXPLORERS[sourceChain.id]}${log.transactionHash}`,
-//       } satisfies BridgeActivity;
-//     }),
-//   );
+      return {
+        messageId: log.args.messageId!,
+        receiver: log.args.receiver!,
+        amount: log.args.amount!,
+        source: sourceChain,
+        destination,
+        blockNumber: log.blockNumber,
+        transactionHash: log.transactionHash,
+        tokenSymbol: symbol,
+        tokenDecimals: decimals,
+        explorerTxUrl: `${EXPLORERS[sourceChain.id]}${log.transactionHash}`,
+      } satisfies BridgeActivity;
+    }),
+  );
 
-//   return results;
-// }
+  return results;
+}
 
 // function AddTokenButton({ token, chainId }: { token: BridgeTokenMeta; chainId: number }) {
 //   const { data: walletClient } = useWalletClient({ chainId });
@@ -268,10 +273,12 @@ async function fetchSepoliaBridgeActivity(address: `0x${string}`): Promise<Bridg
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
   });
+  // console.log("response from subgraph", res);
 
   if (!res.ok) throw new Error("Failed to fetch bridge activity from subgraph");
 
   const { data, errors } = await res.json();
+  console.log("subgraph data", { data, errors });
   if (errors) throw new Error(errors[0]?.message ?? "Subgraph query failed");
 
   const sepoliaMeta = CHAINS.find((c) => c.id === sepolia.id)!;
@@ -436,7 +443,7 @@ export function SmartAccountBridgeCard() {
 
   const crossTokenAddress = getTokenAddress(from.id, "CROSS");
 
-const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
+  const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
     address: crossTokenAddress,
     abi: CROSS_TOKEN_ABI,
     functionName: "lastMint",
@@ -568,7 +575,7 @@ const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
       try {
         await switchChainAsync({ chainId: newFrom.id });
       } catch {
-        
+
       }
     }
   };
@@ -656,6 +663,9 @@ const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
   const handleApprove = async () => {
     if (!address || !sa || !srcContract || !srcTokenAddress || !bundlerClient) return;
     try {
+      toast.info(`Confirm in MetaMask: Approving ${amount} ${token.symbol} in ${to.name}`, {
+        duration: 4000,
+      });
       setApproving(true);
       const hash = await bundlerClient.sendUserOperation({
         calls: [
@@ -692,6 +702,9 @@ const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
     if (token.key !== "CROSS") setToken(crossToken);
 
     try {
+      toast.info(`Confirm in MetaMask: Minting ${amount} ${token.symbol} to ${sa}`, {
+        duration: 4000,
+      });
       setFaucetSubmitting(true);
       const hash = await bundlerClient.sendUserOperation({
         calls: [
@@ -745,6 +758,9 @@ const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
       const tokenArg: `0x${string}` = isNative ? ZERO_ADDRESS : (srcTokenAddress as `0x${string}`);
       const amountArg = isNative ? 0n : parsedAmount;
       const value = isNative ? parseEther(amount as `${number}`) : 0n;
+      toast.info(`Confirm in MetaMask: Bridging ${amount} ${token.symbol} to ${to.name}`, {
+        duration: 4000,
+      });
 
       // receiver is the connected EOA — funds land back in the user's wallet on `to`,
       // not in the smart account (matches your current bridge() call signature).
@@ -781,7 +797,7 @@ const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
   return (
     <div className="w-full max-w-[460px]">
       <div className="relative rounded-3xl border border-border/60 bg-card/80 p-1.5 shadow-2xl shadow-primary/10 backdrop-blur-xl">
-      {/* Smart wallet banner */}
+        {/* Smart wallet banner */}
         <div className="mx-1.5 mb-1 flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
           <Wallet className="h-3.5 w-3.5 shrink-0" />
           <span>Using Smart Accounts, Deposit to Your address to start Bridging</span>
@@ -1116,7 +1132,7 @@ const { data: lastMintTime, refetch: refetchLastMint } = useReadContract({
             <DialogTitle>Activity</DialogTitle>
             <DialogDescription>
               {address
-                ? "Recent cross-chain transactions"
+                ? "Recent cross-chain transactions (Activity can show wrong data while in testnets)"
                 : "Connect the wallet whose bridge transfers you want to view."}
             </DialogDescription>
           </DialogHeader>
